@@ -1,0 +1,475 @@
+---
+title: CrunchTime Integration
+description: Sync menu and operations data to CrunchTime
+---
+
+# CrunchTime Integration
+
+[CrunchTime](https://www.crunchtime.com) is a restaurant operations platform for inventory, labor, and food cost management. This outbound integration pushes menu data from EveryBite to CrunchTime.
+
+## Overview
+
+```
+┌─────────────────┐         ┌─────────────────┐
+│    EveryBite    │         │   CrunchTime    │
+│                 │         │                 │
+│  • Menu Items   │────────►│  • Recipes      │
+│  • Nutrition    │         │  • Ingredients  │
+│  • Categories   │         │  • Inventory    │
+│  • Prices       │         │  • Food Cost    │
+└─────────────────┘         └─────────────────┘
+```
+
+## What Gets Synced
+
+| EveryBite Data | CrunchTime Field | Notes |
+|----------------|------------------|-------|
+| Dish name | Recipe name | Menu items become recipes |
+| Description | Recipe description | For reference |
+| Category | Menu category | Organizational |
+| Price | Menu price | For food cost calculations |
+| Ingredients | Recipe components | When available |
+| Nutrition | Nutrition facts | For compliance |
+
+## Setup
+
+### Prerequisites
+
+- CrunchTime account with API access
+- EveryBite Brand or Chain admin access
+- Location mapping between systems
+
+### Step 1: Get CrunchTime API Credentials
+
+1. Log into CrunchTime
+2. Go to **Admin** → **API Configuration**
+3. Create API credentials for EveryBite
+4. Note your Company ID and Location IDs
+
+### Step 2: Enable in EveryBite
+
+```graphql
+mutation EnableCrunchTime($brandId: ID!) {
+  enableIntegration(
+    brandId: $brandId
+    integration: CRUNCHTIME
+    config: {
+      apiKey: "your_crunchtime_api_key"
+      companyId: "your_crunchtime_company_id"
+      syncFrequency: DAILY
+      autoSync: true
+    }
+  ) {
+    id
+    status
+  }
+}
+```
+
+### Step 3: Map Locations
+
+Map EveryBite restaurants to CrunchTime locations:
+
+```graphql
+mutation MapLocations($brandId: ID!) {
+  createIntegrationMappings(
+    brandId: $brandId
+    integration: CRUNCHTIME
+    locationMappings: [
+      {
+        everyBiteRestaurantId: "rest_123"
+        externalLocationId: "crunchtime_loc_456"
+      },
+      {
+        everyBiteRestaurantId: "rest_789"
+        externalLocationId: "crunchtime_loc_012"
+      }
+    ]
+  ) {
+    mappedLocations
+    unmappedLocations {
+      id
+      name
+    }
+  }
+}
+```
+
+### Step 4: Configure Data Flow
+
+Select what data to push:
+
+```graphql
+mutation ConfigureDataFlow($brandId: ID!) {
+  configureIntegrationDataFlow(
+    brandId: $brandId
+    integration: CRUNCHTIME
+    dataTypes: [
+      MENU_ITEMS
+      CATEGORIES
+      PRICES
+      NUTRITION
+      # INGREDIENTS  # Enable if you want recipe sync
+    ]
+  ) {
+    enabledDataTypes
+  }
+}
+```
+
+## Sync Modes
+
+### Menu Item Sync
+
+Push menu items as CrunchTime recipes:
+
+```graphql
+mutation SyncMenuToCrunchTime($brandId: ID!) {
+  triggerIntegrationSync(
+    brandId: $brandId
+    integration: CRUNCHTIME
+    options: {
+      syncType: MENU_ITEMS
+      includeNutrition: true
+      includePrices: true
+    }
+  ) {
+    syncId
+    status
+  }
+}
+```
+
+### Price Updates Only
+
+For frequent price changes without full menu sync:
+
+```graphql
+mutation SyncPricesOnly($brandId: ID!) {
+  triggerIntegrationSync(
+    brandId: $brandId
+    integration: CRUNCHTIME
+    options: {
+      syncType: PRICES_ONLY
+      # Only updates prices for existing items
+    }
+  ) {
+    syncId
+    itemsUpdated
+  }
+}
+```
+
+### Availability Sync
+
+Sync item availability (86'd items):
+
+```graphql
+mutation SyncAvailability($brandId: ID!, $restaurantId: ID!) {
+  syncAvailabilityToCrunchTime(
+    brandId: $brandId
+    restaurantId: $restaurantId
+    unavailableItems: ["dish_123", "dish_456"]
+  ) {
+    synced
+  }
+}
+```
+
+## Data Mapping
+
+### Category Mapping
+
+Map EveryBite categories to CrunchTime menu sections:
+
+```graphql
+mutation MapCategories($brandId: ID!) {
+  createIntegrationMappings(
+    brandId: $brandId
+    integration: CRUNCHTIME
+    categoryMappings: [
+      {
+        everyBiteCategoryId: "cat_salads"
+        externalCategoryId: "ct_fresh_salads"
+      },
+      {
+        everyBiteCategoryId: "cat_bowls"
+        externalCategoryId: "ct_signature_bowls"
+      }
+    ]
+  ) {
+    mappedCategories
+  }
+}
+```
+
+### Item ID Linking
+
+Maintain consistent IDs between systems:
+
+```graphql
+mutation LinkItems($brandId: ID!) {
+  createIntegrationMappings(
+    brandId: $brandId
+    integration: CRUNCHTIME
+    itemMappings: [
+      {
+        everyBiteDishId: "dish_caesar"
+        externalItemId: "ct_recipe_caesar_salad"
+        # Use existing CrunchTime recipe instead of creating new
+      }
+    ]
+  ) {
+    linkedItems
+    newItemsToCreate
+  }
+}
+```
+
+## Configuration Options
+
+```graphql
+input CrunchTimeConfig {
+  # Authentication
+  apiKey: String!
+  companyId: String!
+
+  # Sync settings
+  syncFrequency: SyncFrequency  # REALTIME, HOURLY, DAILY
+  autoSync: Boolean
+
+  # What to sync
+  syncMenuItems: Boolean
+  syncCategories: Boolean
+  syncPrices: Boolean
+  syncNutrition: Boolean
+  syncIngredients: Boolean
+  syncAvailability: Boolean
+
+  # Behavior
+  createMissingItems: Boolean    # Create items in CrunchTime if not found
+  updateExistingItems: Boolean   # Update existing CrunchTime recipes
+  deleteRemovedItems: Boolean    # Remove from CrunchTime if removed from EveryBite
+
+  # Scope
+  locationScope: LocationScope   # ALL, SELECTED
+  selectedLocations: [ID!]
+}
+```
+
+## Real-Time Updates
+
+For immediate sync when menu changes:
+
+```graphql
+mutation EnableRealTimeSync($brandId: ID!) {
+  configureIntegration(
+    brandId: $brandId
+    integration: CRUNCHTIME
+    config: {
+      syncFrequency: REALTIME
+      triggerOn: [
+        DISH_CREATED
+        DISH_UPDATED
+        DISH_DELETED
+        PRICE_CHANGED
+        AVAILABILITY_CHANGED
+      ]
+    }
+  ) {
+    configured
+  }
+}
+```
+
+## Handling Menu Changes
+
+### New Items
+
+When a dish is added to EveryBite:
+
+```
+1. EveryBite dish created
+2. Integration triggered (real-time or scheduled)
+3. New recipe created in CrunchTime
+4. Mapping stored for future updates
+```
+
+### Updated Items
+
+When a dish is modified:
+
+```graphql
+# Automatic sync updates CrunchTime
+# Or trigger manual sync for specific item:
+mutation SyncSingleItem($brandId: ID!, $dishId: ID!) {
+  syncItemToCrunchTime(
+    brandId: $brandId
+    dishId: $dishId
+  ) {
+    synced
+    crunchTimeRecipeId
+  }
+}
+```
+
+### Removed Items
+
+Configure deletion behavior:
+
+```graphql
+mutation ConfigureDeletion($brandId: ID!) {
+  configureIntegration(
+    brandId: $brandId
+    integration: CRUNCHTIME
+    config: {
+      deleteRemovedItems: false  # Keep in CrunchTime but mark inactive
+      # OR
+      deleteRemovedItems: true   # Remove from CrunchTime
+    }
+  ) {
+    configured
+  }
+}
+```
+
+## Sync Monitoring
+
+### Check Sync Status
+
+```graphql
+query GetCrunchTimeSyncStatus($brandId: ID!) {
+  integrationStatus(brandId: $brandId, integration: CRUNCHTIME) {
+    status           # ACTIVE, PAUSED, ERROR
+    lastSyncAt
+    lastSyncStatus   # SUCCESS, PARTIAL, FAILED
+    nextScheduledSync
+    itemsSynced
+    itemsFailed
+    errorMessage
+  }
+}
+```
+
+### View Sync History
+
+```graphql
+query GetSyncHistory($brandId: ID!) {
+  integrationSyncLogs(
+    brandId: $brandId
+    integration: CRUNCHTIME
+    limit: 20
+  ) {
+    syncId
+    syncType
+    startedAt
+    completedAt
+    status
+    itemsCreated
+    itemsUpdated
+    itemsFailed
+    errors {
+      itemId
+      itemName
+      errorMessage
+    }
+  }
+}
+```
+
+## Troubleshooting
+
+### "Recipe already exists"
+
+CrunchTime found an existing recipe with the same name. Options:
+
+1. **Link to existing:** Create a mapping to use the existing recipe
+2. **Rename:** Update the EveryBite dish name to be unique
+3. **Force create:** Enable duplicate creation (not recommended)
+
+```graphql
+mutation HandleDuplicate($brandId: ID!, $dishId: ID!, $crunchTimeId: String!) {
+  createIntegrationMapping(
+    brandId: $brandId
+    integration: CRUNCHTIME
+    mapping: {
+      everyBiteDishId: $dishId
+      externalItemId: $crunchTimeId
+    }
+  ) {
+    linked
+  }
+}
+```
+
+### "Location not found"
+
+The CrunchTime location ID doesn't exist. Verify:
+- Location ID is correct
+- Location is active in CrunchTime
+- API key has access to that location
+
+### "Price sync failed"
+
+Price updates failed. Common causes:
+- Price format incompatible
+- Price below CrunchTime minimum
+- Item locked in CrunchTime
+
+```graphql
+query GetPriceSyncErrors($syncId: ID!) {
+  syncErrors(syncId: $syncId) {
+    itemId
+    field        # "price"
+    value        # The value that failed
+    errorMessage # Why it failed
+  }
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Start with manual sync">
+    Before enabling auto-sync, run manual syncs and review the results:
+
+    ```graphql
+    mutation {
+      triggerIntegrationSync(
+        brandId: "..."
+        integration: CRUNCHTIME
+        options: { previewOnly: true }
+      ) {
+        preview {
+          itemsToCreate
+          itemsToUpdate
+          potentialConflicts
+        }
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Map existing items first">
+    Before syncing, map EveryBite dishes to existing CrunchTime recipes to avoid duplicates.
+  </Accordion>
+
+  <Accordion title="Use scheduled sync for stability">
+    Real-time sync is powerful but can cause issues with rapid changes. Consider daily sync for most use cases.
+  </Accordion>
+
+  <Accordion title="Monitor sync health">
+    Set up alerts for sync failures to catch issues early.
+  </Accordion>
+</AccordionGroup>
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Integrations Overview" icon="plug" href="/integrations/overview">
+    All integrations
+  </Card>
+  <Card title="Menu API" icon="utensils" href="/menu-api/overview">
+    Menu data reference
+  </Card>
+</CardGroup>

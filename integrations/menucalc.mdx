@@ -1,0 +1,365 @@
+---
+title: MenuCalc Integration
+description: Import nutrition data from MenuCalc
+---
+
+# MenuCalc Integration
+
+[MenuCalc](https://www.menucalc.com) provides FDA-compliant nutritional analysis for restaurant menus. This integration imports nutrition data directly into EveryBite, keeping your menu nutrition accurate and up-to-date.
+
+## Overview
+
+```
+┌─────────────────┐         ┌─────────────────┐
+│    MenuCalc     │         │    EveryBite    │
+│                 │         │                 │
+│  • Recipes      │────────►│  • Dishes       │
+│  • Ingredients  │         │  • Nutrition    │
+│  • Nutrition    │         │  • Allergens    │
+│  • Allergens    │         │                 │
+└─────────────────┘         └─────────────────┘
+```
+
+## What Gets Synced
+
+| MenuCalc Data | EveryBite Field | Notes |
+|---------------|-----------------|-------|
+| Recipe name | Dish name | Matched by name or ID |
+| Calories | nutrition.calories | Per serving |
+| Macronutrients | nutrition.protein, etc. | Full macro breakdown |
+| Micronutrients | nutrition.vitamins, etc. | When available |
+| Allergens | allergens[] | All 9 major allergens |
+| Serving size | nutrition.servingSize | As configured |
+
+## Setup
+
+### Prerequisites
+
+- MenuCalc account with API access
+- EveryBite Brand or Chain admin access
+- Menu items created in both systems
+
+### Step 1: Get MenuCalc API Credentials
+
+1. Log into MenuCalc
+2. Go to **Settings** → **API Access**
+3. Generate an API key
+4. Copy the API key and secret
+
+### Step 2: Enable in EveryBite
+
+```graphql
+mutation EnableMenuCalc($brandId: ID!) {
+  enableIntegration(
+    brandId: $brandId
+    integration: MENUCALC
+    config: {
+      apiKey: "your_menucalc_api_key"
+      apiSecret: "your_menucalc_secret"
+      syncFrequency: DAILY
+      autoSync: true
+      matchBy: NAME  # or EXTERNAL_ID
+    }
+  ) {
+    id
+    status
+    lastSyncAt
+  }
+}
+```
+
+### Step 3: Map Menu Items
+
+If your dish names don't match exactly between systems, create mappings:
+
+```graphql
+mutation MapMenuItems($brandId: ID!) {
+  createIntegrationMappings(
+    brandId: $brandId
+    integration: MENUCALC
+    mappings: [
+      {
+        everyBiteDishId: "dish_123"
+        externalId: "menucalc_recipe_456"
+      },
+      {
+        everyBiteDishId: "dish_789"
+        externalId: "menucalc_recipe_012"
+      }
+    ]
+  ) {
+    mappedCount
+    unmappedItems {
+      id
+      name
+    }
+  }
+}
+```
+
+### Step 4: Run Initial Sync
+
+```graphql
+mutation InitialSync($brandId: ID!) {
+  triggerIntegrationSync(
+    brandId: $brandId
+    integration: MENUCALC
+  ) {
+    syncId
+    status
+  }
+}
+```
+
+## Configuration Options
+
+```graphql
+input MenuCalcConfig {
+  # Authentication
+  apiKey: String!
+  apiSecret: String!
+
+  # Sync settings
+  syncFrequency: SyncFrequency  # HOURLY, DAILY, WEEKLY
+  autoSync: Boolean
+
+  # Matching
+  matchBy: MatchStrategy  # NAME, EXTERNAL_ID, SKU
+
+  # What to sync
+  syncNutrition: Boolean      # Default: true
+  syncAllergens: Boolean      # Default: true
+  syncIngredients: Boolean    # Default: false
+
+  # Conflict resolution
+  onConflict: ConflictStrategy  # OVERWRITE, KEEP_EXISTING, MANUAL
+}
+```
+
+## Sync Behavior
+
+### Automatic Matching
+
+When `matchBy: NAME`, EveryBite attempts to match dishes by name:
+
+```
+MenuCalc: "Chicken Caesar Salad"
+    ↓ matches ↓
+EveryBite: "Chicken Caesar Salad"
+```
+
+Fuzzy matching handles minor differences:
+- Case insensitive: "CAESAR SALAD" = "Caesar Salad"
+- Punctuation ignored: "B.L.T." = "BLT"
+- Common abbreviations: "w/" = "with"
+
+### Handling New Items
+
+When MenuCalc has items not in EveryBite:
+
+```graphql
+# Option 1: Auto-create dishes
+mutation {
+  configureIntegration(
+    brandId: "brand_xxx"
+    integration: MENUCALC
+    config: {
+      createMissingDishes: true
+      defaultCategory: "category_uncategorized"
+    }
+  ) { ... }
+}
+
+# Option 2: Manual review
+query GetUnmatchedItems($brandId: ID!) {
+  integrationUnmatchedItems(
+    brandId: $brandId
+    integration: MENUCALC
+  ) {
+    externalId
+    externalName
+    suggestedMatch {
+      dishId
+      dishName
+      confidence  # 0-100
+    }
+  }
+}
+```
+
+### Conflict Resolution
+
+When data exists in both systems:
+
+| Strategy | Behavior |
+|----------|----------|
+| `OVERWRITE` | MenuCalc data replaces EveryBite data |
+| `KEEP_EXISTING` | EveryBite data preserved |
+| `MANUAL` | Conflicts flagged for review |
+
+```graphql
+# Review conflicts
+query GetSyncConflicts($syncId: ID!) {
+  syncConflicts(syncId: $syncId) {
+    dishId
+    field
+    currentValue
+    incomingValue
+    resolution  # PENDING, ACCEPTED, REJECTED
+  }
+}
+
+# Resolve a conflict
+mutation ResolveConflict($conflictId: ID!, $resolution: Resolution!) {
+  resolveSyncConflict(
+    conflictId: $conflictId
+    resolution: $resolution  # ACCEPT_INCOMING or KEEP_CURRENT
+  ) {
+    resolved
+  }
+}
+```
+
+## Nutrition Data Format
+
+MenuCalc provides comprehensive nutrition data:
+
+```json
+{
+  "dish": "Chicken Caesar Salad",
+  "servingSize": "1 salad (350g)",
+  "nutrition": {
+    "calories": 450,
+    "caloriesFromFat": 240,
+    "fatTotal": 26,
+    "fatSaturated": 6,
+    "fatTrans": 0,
+    "cholesterol": 85,
+    "sodium": 890,
+    "carbohydrates": 18,
+    "fiber": 4,
+    "sugar": 3,
+    "protein": 38,
+    "vitaminA": 120,
+    "vitaminC": 35,
+    "calcium": 15,
+    "iron": 10
+  },
+  "allergens": [
+    { "type": "DAIRY", "severity": "CONTAINS" },
+    { "type": "GLUTEN", "severity": "CONTAINS" },
+    { "type": "EGG", "severity": "CONTAINS" },
+    { "type": "FISH", "severity": "CONTAINS" }
+  ]
+}
+```
+
+## Handling Customizable Items
+
+For build-your-own dishes, sync component nutrition:
+
+```graphql
+mutation SyncCustomizableItem($brandId: ID!, $dishId: ID!) {
+  syncMenuCalcCustomizable(
+    brandId: $brandId
+    dishId: $dishId
+    config: {
+      syncBaseNutrition: true
+      syncComponentNutrition: true  # Individual toppings, proteins, etc.
+    }
+  ) {
+    componentsUpdated
+  }
+}
+```
+
+This enables real-time nutrition calculation as users customize their order.
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Keep names consistent">
+    Use identical names in MenuCalc and EveryBite when possible. This makes automatic matching reliable and reduces manual mapping.
+  </Accordion>
+
+  <Accordion title="Sync after recipe changes">
+    Trigger a manual sync after updating recipes in MenuCalc to ensure EveryBite reflects the latest nutrition data.
+
+    ```graphql
+    mutation {
+      triggerIntegrationSync(brandId: "...", integration: MENUCALC) {
+        syncId
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Review before going live">
+    Run syncs in preview mode first:
+
+    ```graphql
+    mutation {
+      triggerIntegrationSync(
+        brandId: "..."
+        integration: MENUCALC
+        options: { previewOnly: true }
+      ) {
+        preview {
+          itemsToCreate
+          itemsToUpdate
+          conflicts
+        }
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Monitor sync health">
+    Set up webhooks to alert on sync failures:
+
+    ```graphql
+    mutation {
+      registerIntegrationWebhook(
+        brandId: "..."
+        events: [SYNC_FAILED, INTEGRATION_ERROR]
+        url: "https://your-server.com/webhooks/everybite"
+      ) { webhookId }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+### "Item not found in MenuCalc"
+
+The dish exists in EveryBite but not MenuCalc. Either:
+- Add the recipe to MenuCalc
+- Create a manual mapping to a different MenuCalc recipe
+- Exclude the item from sync
+
+### "Nutrition values differ significantly"
+
+Large differences may indicate:
+- Different serving sizes
+- Recipe was updated in one system
+- Wrong items mapped together
+
+Review the mapping and serving size configuration.
+
+### "Allergen mismatch"
+
+MenuCalc and EveryBite may categorize allergens differently. Check:
+- Allergen type mapping in integration settings
+- Whether "May Contain" vs "Contains" is handled correctly
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Integrations Overview" icon="plug" href="/integrations/overview">
+    All available integrations
+  </Card>
+  <Card title="Nutrition Data" icon="apple-whole" href="/menu-api/data-objects/nutrition">
+    Nutrition schema reference
+  </Card>
+</CardGroup>

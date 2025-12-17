@@ -112,6 +112,30 @@
             ]
           },
           {
+            "tab": "Integrations",
+            "groups": [
+              {
+                "group": "Integrations",
+                "pages": [
+                  "integrations/overview"
+                ]
+              },
+              {
+                "group": "Data Sources",
+                "pages": [
+                  "integrations/menucalc"
+                ]
+              },
+              {
+                "group": "Loyalty & Operations",
+                "pages": [
+                  "integrations/thanx",
+                  "integrations/crunchtime"
+                ]
+              }
+            ]
+          },
+          {
             "tab": "Ordering API",
             "groups": [
               {

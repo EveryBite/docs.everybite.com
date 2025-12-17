@@ -1,0 +1,348 @@
+---
+title: Integrations Overview
+description: Connect EveryBite to your existing systems
+---
+
+# Third-Party Integrations
+
+EveryBite integrates with your existing restaurant technology stack. Pull nutrition data in, push menu updates out, and sync bidirectionally with loyalty and operations systems.
+
+## Integration Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      YOUR RESTAURANT                             │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   INBOUND                 EVERYBITE              OUTBOUND        │
+│   ────────                ─────────              ────────        │
+│                                                                  │
+│   MenuCalc ──────►  ┌─────────────────┐  ──────► POS Systems    │
+│   (Nutrition)       │                 │         (Menu Sync)     │
+│                     │   Menu Data     │                         │
+│   Recipe Mgmt ────► │   + Nutrition   │  ──────► Delivery Apps  │
+│   Systems           │   + Allergens   │         (DoorDash, etc) │
+│                     │                 │                         │
+│   POS Import ─────► │                 │  ──────► CrunchTime     │
+│                     └─────────────────┘         (Operations)    │
+│                                                                  │
+│   BIDIRECTIONAL                                                  │
+│   ─────────────                                                  │
+│                                                                  │
+│   Thanx ◄────────────────────────────────────────────► Loyalty  │
+│   Punchh ◄───────────────────────────────────────────► Rewards  │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Integration Types
+
+### Inbound (Data Sources)
+
+Pull data into EveryBite from external systems.
+
+| Integration | Data Type | Use Case |
+|-------------|-----------|----------|
+| [MenuCalc](/integrations/menucalc) | Nutrition analysis | Get FDA-compliant nutrition facts |
+| Recipe Management | Ingredients, recipes | Sync from your recipe database |
+| POS Systems | Menu items, prices | Import existing menu structure |
+
+### Outbound (Data Destinations)
+
+Push EveryBite data to external systems.
+
+| Integration | Data Type | Use Case |
+|-------------|-----------|----------|
+| [CrunchTime](/integrations/crunchtime) | Menu, inventory | Operations management |
+| Delivery Platforms | Menu, availability | Third-party ordering |
+| Digital Signage | Menu, nutrition | In-store displays |
+
+### Bidirectional
+
+Two-way sync for real-time data consistency.
+
+| Integration | Data Type | Use Case |
+|-------------|-----------|----------|
+| [Thanx](/integrations/thanx) | Loyalty, transactions | Rewards program sync |
+| Punchh | Loyalty, offers | Loyalty management |
+
+## Managing Integrations
+
+### Enable an Integration
+
+```graphql
+mutation EnableIntegration(
+  $brandId: ID!
+  $integration: IntegrationType!
+  $config: IntegrationConfigInput!
+) {
+  enableIntegration(
+    brandId: $brandId
+    integration: $integration
+    config: $config
+  ) {
+    id
+    status
+    lastSyncAt
+  }
+}
+```
+
+### Configuration Example
+
+```graphql
+mutation {
+  enableIntegration(
+    brandId: "brand_honeygrow"
+    integration: MENUCALC
+    config: {
+      apiKey: "mc_xxx"
+      syncFrequency: DAILY
+      autoSync: true
+    }
+  ) {
+    id
+    status
+  }
+}
+```
+
+### Check Integration Status
+
+```graphql
+query GetIntegrations($brandId: ID!) {
+  integrations(brandId: $brandId) {
+    integration
+    status          # ACTIVE, PAUSED, ERROR
+    lastSyncAt
+    nextSyncAt
+    syncFrequency
+    errorMessage
+  }
+}
+```
+
+### Disable an Integration
+
+```graphql
+mutation DisableIntegration($brandId: ID!, $integration: IntegrationType!) {
+  disableIntegration(brandId: $brandId, integration: $integration) {
+    success
+  }
+}
+```
+
+## Sync Modes
+
+### Automatic Sync
+
+Set up scheduled syncs:
+
+```graphql
+mutation ConfigureAutoSync(
+  $brandId: ID!
+  $integration: IntegrationType!
+  $frequency: SyncFrequency!
+) {
+  configureIntegrationSync(
+    brandId: $brandId
+    integration: $integration
+    config: {
+      autoSync: true
+      syncFrequency: $frequency  # HOURLY, DAILY, WEEKLY
+    }
+  ) {
+    nextSyncAt
+  }
+}
+```
+
+### Manual Sync
+
+Trigger an immediate sync:
+
+```graphql
+mutation TriggerSync($brandId: ID!, $integration: IntegrationType!) {
+  triggerIntegrationSync(brandId: $brandId, integration: $integration) {
+    syncId
+    status      # PENDING, IN_PROGRESS, COMPLETED, FAILED
+    startedAt
+  }
+}
+```
+
+### Sync Status
+
+Monitor sync progress:
+
+```graphql
+query GetSyncStatus($syncId: ID!) {
+  syncStatus(syncId: $syncId) {
+    status
+    progress        # 0-100
+    itemsProcessed
+    itemsTotal
+    errors {
+      itemId
+      message
+    }
+    completedAt
+  }
+}
+```
+
+## Data Flow Control
+
+### Select What to Sync
+
+Control which data flows to each integration:
+
+```graphql
+mutation ConfigureDataFlow(
+  $brandId: ID!
+  $integration: IntegrationType!
+  $dataTypes: [DataType!]!
+) {
+  configureIntegrationDataFlow(
+    brandId: $brandId
+    integration: $integration
+    dataTypes: $dataTypes  # MENU_ITEMS, NUTRITION, PRICES, AVAILABILITY
+  ) {
+    enabledDataTypes
+  }
+}
+```
+
+### Filter by Location
+
+Sync specific restaurants only:
+
+```graphql
+mutation {
+  configureIntegrationScope(
+    brandId: "brand_xxx"
+    integration: CRUNCHTIME
+    scope: {
+      includeRestaurants: ["rest_1", "rest_2"]
+      # OR
+      excludeRestaurants: ["rest_3"]
+      # OR
+      includeChains: ["chain_east"]
+    }
+  ) {
+    scopedRestaurants
+  }
+}
+```
+
+## Webhooks
+
+Receive notifications when sync events occur:
+
+```graphql
+mutation RegisterWebhook(
+  $brandId: ID!
+  $events: [WebhookEvent!]!
+  $url: String!
+) {
+  registerIntegrationWebhook(
+    brandId: $brandId
+    events: $events
+    url: $url
+  ) {
+    webhookId
+    secret  # Use to verify webhook signatures
+  }
+}
+```
+
+### Webhook Events
+
+| Event | Triggered When |
+|-------|----------------|
+| `SYNC_STARTED` | A sync begins |
+| `SYNC_COMPLETED` | Sync finishes successfully |
+| `SYNC_FAILED` | Sync encounters an error |
+| `DATA_UPDATED` | Data changed via integration |
+| `INTEGRATION_ERROR` | Integration has issues |
+
+### Webhook Payload
+
+```json
+{
+  "event": "SYNC_COMPLETED",
+  "timestamp": "2025-12-17T12:00:00Z",
+  "brandId": "brand_xxx",
+  "integration": "MENUCALC",
+  "data": {
+    "syncId": "sync_123",
+    "itemsProcessed": 150,
+    "duration": 45
+  },
+  "signature": "sha256=..."
+}
+```
+
+## Dashboard Management
+
+Integrations can also be managed in the EveryBite Dashboard:
+
+1. Go to **Settings** → **Integrations**
+2. Click **+ Add Integration**
+3. Select the integration type
+4. Enter credentials and configure options
+5. Enable and test
+
+<Frame>
+  ![Integration Dashboard](/images/integrations-dashboard.png)
+</Frame>
+
+## Troubleshooting
+
+### Common Issues
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| Sync stuck | API rate limit | Wait and retry, or reduce sync frequency |
+| Missing items | Scope filter | Check restaurant/chain scope settings |
+| Stale data | Sync disabled | Re-enable auto-sync |
+| Auth error | Expired credentials | Rotate API keys in config |
+
+### View Sync Logs
+
+```graphql
+query GetSyncLogs($brandId: ID!, $integration: IntegrationType!) {
+  integrationSyncLogs(
+    brandId: $brandId
+    integration: $integration
+    limit: 50
+  ) {
+    syncId
+    status
+    startedAt
+    completedAt
+    itemsProcessed
+    errors {
+      message
+      timestamp
+    }
+  }
+}
+```
+
+## Available Integrations
+
+<CardGroup cols={2}>
+  <Card title="MenuCalc" icon="calculator" href="/integrations/menucalc">
+    Nutrition analysis and FDA compliance
+  </Card>
+  <Card title="Thanx" icon="star" href="/integrations/thanx">
+    Loyalty program integration
+  </Card>
+  <Card title="CrunchTime" icon="clock" href="/integrations/crunchtime">
+    Operations and inventory sync
+  </Card>
+  <Card title="Custom" icon="plug" href="/integrations/custom">
+    Build your own integration
+  </Card>
+</CardGroup>

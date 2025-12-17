@@ -1,0 +1,416 @@
+---
+title: Thanx Integration
+description: Bidirectional loyalty program sync
+---
+
+# Thanx Integration
+
+[Thanx](https://www.thanx.com) is a loyalty and guest engagement platform. This bidirectional integration syncs loyalty data between Thanx and EveryBite Passport, enabling unified rewards across your ecosystem.
+
+## Overview
+
+```
+┌─────────────────┐                    ┌─────────────────┐
+│      Thanx      │◄──────────────────►│    EveryBite    │
+│                 │                    │    Passport     │
+│  • Members      │   Bidirectional    │                 │
+│  • Points       │       Sync         │  • Preferences  │
+│  • Rewards      │                    │  • History      │
+│  • Transactions │                    │  • Loyalty      │
+└─────────────────┘                    └─────────────────┘
+```
+
+## What Gets Synced
+
+### Thanx → EveryBite
+
+| Thanx Data | Passport Field | Notes |
+|------------|----------------|-------|
+| Member ID | loyaltyPrograms.memberId | Links accounts |
+| Points balance | loyaltyPrograms.points | Real-time balance |
+| Tier status | loyaltyPrograms.tier | Gold, Platinum, etc. |
+| Available rewards | availableRewards[] | Redeemable offers |
+| Transaction history | Enriches meal history | When ordered via EveryBite |
+
+### EveryBite → Thanx
+
+| Passport Data | Thanx Field | Notes |
+|---------------|-------------|-------|
+| Orders | Transactions | Points earned |
+| Redemptions | Reward usage | Points spent |
+| Profile updates | Member profile | Email, preferences |
+
+## Setup
+
+### Prerequisites
+
+- Thanx account with API access
+- EveryBite Brand admin access
+- Matching customer identifiers (email or phone)
+
+### Step 1: Get Thanx API Credentials
+
+1. Log into Thanx Merchant Portal
+2. Go to **Settings** → **Integrations** → **API**
+3. Generate API credentials
+4. Note your Merchant ID
+
+### Step 2: Enable in EveryBite
+
+```graphql
+mutation EnableThanx($brandId: ID!) {
+  enableIntegration(
+    brandId: $brandId
+    integration: THANX
+    config: {
+      apiKey: "your_thanx_api_key"
+      merchantId: "your_thanx_merchant_id"
+      syncDirection: BIDIRECTIONAL
+      matchBy: EMAIL  # or PHONE
+    }
+  ) {
+    id
+    status
+  }
+}
+```
+
+### Step 3: Configure Member Matching
+
+```graphql
+mutation ConfigureMemberMatching($brandId: ID!) {
+  configureIntegration(
+    brandId: $brandId
+    integration: THANX
+    config: {
+      matchBy: EMAIL
+      createMissingMembers: true  # Create Thanx member if not found
+      linkExistingMembers: true   # Auto-link when email matches
+    }
+  ) {
+    configured
+  }
+}
+```
+
+## User Flows
+
+### Linking a Thanx Account to Passport
+
+When a user wants to connect their existing Thanx account:
+
+```graphql
+mutation LinkThanxAccount(
+  $passportToken: String!
+  $thanxEmail: String!
+) {
+  linkLoyaltyProgram(
+    token: $passportToken
+    program: THANX
+    identifier: $thanxEmail
+  ) {
+    loyaltyConnection {
+      id
+      status       # PENDING_VERIFICATION, LINKED
+      memberId
+      points
+    }
+    verificationRequired  # true if email verification needed
+  }
+}
+```
+
+If verification required:
+
+```graphql
+mutation VerifyThanxLink(
+  $passportToken: String!
+  $verificationCode: String!
+) {
+  verifyLoyaltyLink(
+    token: $passportToken
+    program: THANX
+    code: $verificationCode
+  ) {
+    loyaltyConnection {
+      status  # LINKED
+      points
+      tier { name }
+    }
+  }
+}
+```
+
+### Checking Points at Restaurant
+
+When a Passport user visits a Thanx-enabled restaurant:
+
+```graphql
+query CheckThanxAtRestaurant(
+  $passportToken: String!
+  $restaurantId: ID!
+) {
+  loyaltyAtRestaurant(
+    token: $passportToken
+    restaurantId: $restaurantId
+  ) {
+    program {
+      name           # "Honeygrow Rewards"
+      type           # THANX
+    }
+    currentPoints
+    pointsToNextReward
+    tier {
+      name
+      multiplier     # Points earning multiplier
+    }
+    availableRewards {
+      id
+      name
+      pointsCost
+      expiresAt
+    }
+  }
+}
+```
+
+### Earning Points
+
+When an order is placed through EveryBite:
+
+```graphql
+# Automatically happens on checkout
+mutation Checkout(...) {
+  checkout(...) {
+    order {
+      id
+      total
+    }
+    loyaltyEarned {
+      program       # "Thanx"
+      pointsEarned  # Based on spend
+      newBalance
+      tierProgress {
+        current
+        pointsToNext
+        nextTier
+      }
+    }
+  }
+}
+```
+
+### Redeeming Rewards
+
+```graphql
+mutation RedeemThanxReward(
+  $passportToken: String!
+  $rewardId: ID!
+  $orderId: ID!
+) {
+  redeemLoyaltyReward(
+    token: $passportToken
+    loyaltyProgram: THANX
+    rewardId: $rewardId
+    orderId: $orderId
+  ) {
+    success
+    appliedDiscount {
+      amount
+      description
+    }
+    newPointsBalance
+  }
+}
+```
+
+## Real-Time Sync
+
+### Webhook Events from Thanx
+
+Register to receive Thanx events:
+
+```graphql
+mutation RegisterThanxWebhooks($brandId: ID!) {
+  configureIntegration(
+    brandId: $brandId
+    integration: THANX
+    webhookEvents: [
+      POINTS_EARNED
+      POINTS_REDEEMED
+      TIER_CHANGED
+      REWARD_AVAILABLE
+      MEMBER_UPDATED
+    ]
+  ) {
+    webhookUrl  # URL Thanx will call
+  }
+}
+```
+
+### Event Payloads
+
+**Points Earned:**
+```json
+{
+  "event": "POINTS_EARNED",
+  "memberId": "thanx_123",
+  "passportId": "passport_456",
+  "points": 50,
+  "newBalance": 1250,
+  "transactionId": "txn_789",
+  "timestamp": "2025-12-17T12:00:00Z"
+}
+```
+
+**Tier Changed:**
+```json
+{
+  "event": "TIER_CHANGED",
+  "memberId": "thanx_123",
+  "previousTier": "Silver",
+  "newTier": "Gold",
+  "benefits": ["2x points", "Free birthday reward"]
+}
+```
+
+## Configuration Options
+
+```graphql
+input ThanxConfig {
+  # Authentication
+  apiKey: String!
+  merchantId: String!
+
+  # Sync direction
+  syncDirection: SyncDirection!  # INBOUND, OUTBOUND, BIDIRECTIONAL
+
+  # Member matching
+  matchBy: IdentifierType!  # EMAIL, PHONE
+  createMissingMembers: Boolean
+  linkExistingMembers: Boolean
+
+  # Points behavior
+  earnPointsOnEveryBiteOrders: Boolean  # Default: true
+  allowRedemptionViaEveryBite: Boolean  # Default: true
+
+  # Data sync
+  syncTransactionHistory: Boolean  # Import past transactions
+  syncTierStatus: Boolean
+  syncAvailableRewards: Boolean
+}
+```
+
+## Points Earning Rules
+
+Configure how points are earned on EveryBite orders:
+
+```graphql
+mutation ConfigurePointsEarning($brandId: ID!) {
+  configureIntegration(
+    brandId: $brandId
+    integration: THANX
+    pointsConfig: {
+      earnRate: 1.0           # Points per dollar
+      tierMultipliers: {
+        SILVER: 1.0
+        GOLD: 1.5
+        PLATINUM: 2.0
+      }
+      excludeCategories: ["alcohol", "gift_cards"]
+      minimumOrderAmount: 5.00
+    }
+  ) {
+    configured
+  }
+}
+```
+
+## Handling Edge Cases
+
+### Member Not Found
+
+```graphql
+# When Passport user has no Thanx account
+query CheckLoyalty($passportToken: String!, $restaurantId: ID!) {
+  loyaltyAtRestaurant(token: $passportToken, restaurantId: $restaurantId) {
+    # Returns null if no Thanx account linked
+    program { name }
+  }
+}
+
+# Prompt user to sign up or link
+mutation CreateOrLinkThanx($passportToken: String!, $email: String!) {
+  linkOrCreateLoyaltyMember(
+    token: $passportToken
+    program: THANX
+    email: $email
+    createIfNotExists: true
+  ) {
+    status  # CREATED, LINKED, PENDING_VERIFICATION
+    memberId
+  }
+}
+```
+
+### Conflicting Accounts
+
+When a user has multiple Thanx accounts:
+
+```graphql
+query FindThanxAccounts($email: String!, $phone: String!) {
+  findLoyaltyAccounts(
+    program: THANX
+    identifiers: { email: $email, phone: $phone }
+  ) {
+    accounts {
+      memberId
+      email
+      phone
+      points
+      createdAt
+    }
+    # User can choose which to link
+  }
+}
+```
+
+## Testing
+
+### Sandbox Environment
+
+Use Thanx sandbox for development:
+
+```graphql
+mutation EnableThanxSandbox($brandId: ID!) {
+  enableIntegration(
+    brandId: $brandId
+    integration: THANX
+    config: {
+      apiKey: "sandbox_key"
+      merchantId: "sandbox_merchant"
+      environment: SANDBOX
+    }
+  ) {
+    status
+  }
+}
+```
+
+### Test Scenarios
+
+1. **Link existing member** - Use test email `test@thanx.com`
+2. **Create new member** - Any unregistered email
+3. **Earn points** - Place test order
+4. **Redeem reward** - Use test reward ID `reward_test`
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Meta-Loyalty" icon="star" href="/passport/loyalty">
+    Unified loyalty in Passport
+  </Card>
+  <Card title="Integrations Overview" icon="plug" href="/integrations/overview">
+    All integrations
+  </Card>
+</CardGroup>
