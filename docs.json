@@ -173,5 +173,34 @@
     "thumbsRating": true,
     "suggestEdit": true,
     "raiseIssue": true
-  }
+  },
+  "seo": {
+    "indexHiddenPages": false
+  },
+  "metadata": {
+    "og:site_name": "EveryBite Developer Docs",
+    "og:description": "Build personalized dining experiences with the EveryBite Menu API, Passport, and Ordering API",
+    "og:image": "https://docs.everybite.com/images/og-image.svg",
+    "twitter:card": "summary_large_image",
+    "twitter:site": "@everybite"
+  },
+  "modeToggle": {
+    "default": "light",
+    "isHidden": false
+  },
+  "search": {
+    "prompt": "Search docs..."
+  },
+  "anchors": [
+    {
+      "name": "API Playground",
+      "icon": "play",
+      "url": "https://api.everybite-stage.com/graphql"
+    },
+    {
+      "name": "GitHub",
+      "icon": "github",
+      "url": "https://github.com/EveryBite/docs.everybite.com"
+    }
+  ]
 }
