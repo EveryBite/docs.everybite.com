@@ -70,24 +70,23 @@
   </g>
 
   <!-- Arrows to platforms -->
-  <path d="M250 370 L250 420" stroke="#64748B" stroke-width="2" fill="none" marker-end="url(#arrowhead2)"/>
+  <path d="M200 370 L200 420" stroke="#64748B" stroke-width="2" fill="none" marker-end="url(#arrowhead2)"/>
   <path d="M400 370 L400 420" stroke="#64748B" stroke-width="2" fill="none" marker-end="url(#arrowhead2)"/>
-  <path d="M550 370 L550 420" stroke="#64748B" stroke-width="2" fill="none" marker-end="url(#arrowhead2)"/>
+  <path d="M600 370 L600 420" stroke="#64748B" stroke-width="2" fill="none" marker-end="url(#arrowhead2)"/>
   <defs>
     <marker id="arrowhead2" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
       <polygon points="0 0, 8 3, 0 6" fill="#64748B"/>
     </marker>
   </defs>
 
-  <!-- Platform Boxes -->
+  <!-- Platform Boxes - spaced out properly -->
   <!-- Olo - Active -->
   <g filter="url(#shadow)">
-    <rect x="150" y="430" width="200" height="100" rx="12" fill="url(#oloGrad)"/>
-    <text x="250" y="470" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="18" font-weight="bold">Olo Ordering</text>
-    <circle cx="340" cy="445" r="12" fill="#22C55E"/>
-    <text x="340" y="449" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="11" font-weight="bold">✓</text>
-    <text x="250" y="495" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="11" opacity="0.9">Menu • Cart • Checkout • Dispatch</text>
-    <text x="250" y="515" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="10" opacity="0.7">ACTIVE</text>
+    <rect x="100" y="430" width="200" height="100" rx="12" fill="url(#oloGrad)"/>
+    <text x="200" y="465" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="18" font-weight="bold">Olo Ordering</text>
+    <circle cx="200" cy="490" r="10" fill="#22C55E"/>
+    <text x="200" y="494" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="10" font-weight="bold">✓</text>
+    <text x="200" y="518" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="10" opacity="0.9">ACTIVE</text>
   </g>
 
   <!-- Toast - Coming Soon -->
@@ -99,16 +98,16 @@
 
   <!-- Square - Coming Soon -->
   <g filter="url(#shadow)">
-    <rect x="450" y="430" width="200" height="100" rx="12" fill="#94A3B8"/>
-    <text x="550" y="470" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="18" font-weight="bold">Square</text>
-    <text x="550" y="495" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="11" opacity="0.8">Coming Soon</text>
+    <rect x="500" y="430" width="200" height="100" rx="12" fill="#94A3B8"/>
+    <text x="600" y="470" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="18" font-weight="bold">Square</text>
+    <text x="600" y="495" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="11" opacity="0.8">Coming Soon</text>
   </g>
 
   <!-- Legend -->
-  <g transform="translate(580, 550)">
+  <g transform="translate(250, 555)">
     <circle cx="10" cy="10" r="8" fill="#22C55E"/>
     <text x="25" y="14" fill="#64748B" font-family="Arial, sans-serif" font-size="11">Active Integration</text>
-    <rect x="120" y="2" width="16" height="16" rx="3" fill="#94A3B8"/>
-    <text x="142" y="14" fill="#64748B" font-family="Arial, sans-serif" font-size="11">Coming Soon</text>
+    <rect x="140" y="2" width="16" height="16" rx="3" fill="#94A3B8"/>
+    <text x="162" y="14" fill="#64748B" font-family="Arial, sans-serif" font-size="11">Coming Soon</text>
   </g>
 </svg>
