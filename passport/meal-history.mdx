@@ -1,0 +1,314 @@
+---
+title: Meal History
+description: Track every meal with full nutrition data
+---
+
+# Meal History
+
+Passport Meal History records every meal a diner orders through EveryBite-enabled restaurants, complete with nutrition and allergen data.
+
+## Reading Meal History
+
+```graphql
+query GetMealHistory($token: String!, $limit: Int, $after: String) {
+  passport(token: $token) {
+    mealHistory(first: $limit, after: $after) {
+      edges {
+        node {
+          id
+          date
+          dish {
+            id
+            name
+            imageUrl
+          }
+          restaurant {
+            name
+            city
+          }
+          nutrition {
+            calories
+            protein
+            carbohydrates
+            fatTotal
+          }
+          allergens {
+            type
+            displayName
+          }
+          customizations {
+            groupName
+            optionName
+          }
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      totalCount
+    }
+  }
+}
+```
+
+### Example Response
+
+```json
+{
+  "data": {
+    "passport": {
+      "mealHistory": {
+        "edges": [
+          {
+            "node": {
+              "id": "meal_001",
+              "date": "2025-12-16T18:30:00Z",
+              "dish": {
+                "name": "Red Coconut Curry",
+                "imageUrl": "https://..."
+              },
+              "restaurant": {
+                "name": "Honeygrow - Market Street",
+                "city": "Philadelphia"
+              },
+              "nutrition": {
+                "calories": 530,
+                "protein": 18,
+                "carbohydrates": 52,
+                "fatTotal": 24
+              },
+              "allergens": [
+                { "type": "Soy", "displayName": "Soy" }
+              ],
+              "customizations": [
+                { "groupName": "Base", "optionName": "Brown Rice" },
+                { "groupName": "Protein", "optionName": "Tofu" }
+              ]
+            }
+          }
+        ],
+        "totalCount": 47
+      }
+    }
+  }
+}
+```
+
+## Filtering History
+
+### By Date Range
+
+```graphql
+query RecentMeals($token: String!) {
+  passport(token: $token) {
+    mealHistory(
+      filter: {
+        dateFrom: "2025-12-01",
+        dateTo: "2025-12-31"
+      }
+    ) {
+      edges {
+        node { date, dish { name } }
+      }
+    }
+  }
+}
+```
+
+### By Restaurant
+
+```graphql
+query MealsAtRestaurant($token: String!, $restaurantId: ID!) {
+  passport(token: $token) {
+    mealHistory(
+      filter: {
+        restaurantId: $restaurantId
+      }
+    ) {
+      edges {
+        node { date, dish { name } }
+      }
+    }
+  }
+}
+```
+
+## Nutrition Aggregates
+
+Get aggregated nutrition over time:
+
+```graphql
+query NutritionSummary($token: String!, $period: Period!) {
+  passport(token: $token) {
+    nutritionSummary(period: $period) {
+      totalMeals
+      averageCalories
+      totalCalories
+      averageProtein
+      averageCarbohydrates
+      averageFat
+      allergenExposures {
+        type
+        count
+      }
+    }
+  }
+}
+```
+
+### Period Options
+
+| Period | Description |
+|--------|-------------|
+| `TODAY` | Today's meals |
+| `WEEK` | Last 7 days |
+| `MONTH` | Last 30 days |
+| `YEAR` | Last 365 days |
+| `ALL_TIME` | All recorded meals |
+
+### Example Response
+
+```json
+{
+  "nutritionSummary": {
+    "totalMeals": 23,
+    "averageCalories": 520,
+    "totalCalories": 11960,
+    "averageProtein": 22,
+    "averageCarbohydrates": 58,
+    "averageFat": 18,
+    "allergenExposures": [
+      { "type": "Soy", "count": 12 },
+      { "type": "Gluten", "count": 8 }
+    ]
+  }
+}
+```
+
+## Automatic Tracking
+
+Meals are automatically recorded when:
+
+1. Diner places an order through an EveryBite-enabled ordering system
+2. Order is confirmed by the restaurant
+3. Nutrition data is captured at time of order
+
+No manual logging required.
+
+## UI Patterns
+
+### Meal History Timeline
+
+```jsx
+function MealHistoryTimeline({ passportToken }) {
+  const { data } = useQuery(GET_MEAL_HISTORY, {
+    variables: { token: passportToken, limit: 20 }
+  });
+
+  const meals = data?.passport?.mealHistory?.edges || [];
+
+  // Group by date
+  const byDate = groupByDate(meals);
+
+  return (
+    <div className="meal-timeline">
+      {Object.entries(byDate).map(([date, dayMeals]) => (
+        <div key={date} className="day-group">
+          <h3>{formatDate(date)}</h3>
+          <div className="day-summary">
+            Total: {sumCalories(dayMeals)} calories
+          </div>
+          {dayMeals.map(({ node: meal }) => (
+            <MealCard key={meal.id} meal={meal} />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+### Nutrition Dashboard
+
+```jsx
+function NutritionDashboard({ passportToken }) {
+  const { data } = useQuery(GET_NUTRITION_SUMMARY, {
+    variables: { token: passportToken, period: 'WEEK' }
+  });
+
+  const summary = data?.passport?.nutritionSummary;
+
+  return (
+    <div className="nutrition-dashboard">
+      <h2>This Week</h2>
+
+      <div className="stats-grid">
+        <StatCard
+          label="Total Meals"
+          value={summary.totalMeals}
+        />
+        <StatCard
+          label="Avg Calories"
+          value={summary.averageCalories}
+          unit="kcal"
+        />
+        <StatCard
+          label="Avg Protein"
+          value={summary.averageProtein}
+          unit="g"
+        />
+      </div>
+
+      <div className="allergen-exposures">
+        <h3>Allergen Exposures</h3>
+        {summary.allergenExposures.map(({ type, count }) => (
+          <div key={type}>
+            {type}: {count} meals
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+```
+
+## Privacy Controls
+
+Users can:
+
+```graphql
+# Delete a specific meal from history
+mutation DeleteMeal($token: String!, $mealId: ID!) {
+  deleteMealFromHistory(token: $token, mealId: $mealId) {
+    success
+  }
+}
+
+# Clear all history
+mutation ClearHistory($token: String!) {
+  clearMealHistory(token: $token) {
+    success
+  }
+}
+
+# Disable future tracking
+mutation DisableTracking($token: String!) {
+  updatePassportSettings(token: $token, input: {
+    mealTrackingEnabled: false
+  }) {
+    settings { mealTrackingEnabled }
+  }
+}
+```
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Health Export" icon="heart-pulse" href="/passport/health-export">
+    Export to health apps
+  </Card>
+  <Card title="Saved Dishes" icon="heart" href="/passport/saved-dishes">
+    Favorite dishes
+  </Card>
+</CardGroup>

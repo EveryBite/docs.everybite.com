@@ -1,0 +1,213 @@
+---
+title: Brand Hierarchy
+description: Understanding how Brands, Chains, Restaurants, and Menus relate
+---
+
+# Brand Hierarchy
+
+The EveryBite platform organizes restaurant data in a hierarchical structure. Understanding this hierarchy helps you work with the right scope of data.
+
+## The Four Levels
+
+```
+Brand (e.g., Yum! Brands)
+└── Chain (e.g., Taco Bell)
+    └── Restaurant (e.g., Taco Bell #1234 - Times Square)
+        └── Menu (e.g., Breakfast, Lunch, Regional Specials)
+```
+
+<AccordionGroup>
+  <Accordion title="Brand" icon="building">
+    The top-level parent company that may own multiple restaurant chains.
+
+    **Examples:**
+    - Yum! Brands (owns Taco Bell, KFC, Pizza Hut)
+    - Inspire Brands (owns Arby's, Buffalo Wild Wings, Dunkin')
+    - Independent restaurant groups
+
+    **API Access:** A Brand Key gives access to all chains, restaurants, and menus underneath.
+  </Accordion>
+
+  <Accordion title="Chain" icon="store">
+    A restaurant brand with multiple locations sharing the same concept and (mostly) the same menu.
+
+    **Examples:**
+    - Taco Bell
+    - Honeygrow
+    - Chipotle
+
+    **API Access:** A Chain Key gives access to all restaurants in that chain.
+  </Accordion>
+
+  <Accordion title="Restaurant" icon="location-dot">
+    A single physical location where diners can order food.
+
+    **Examples:**
+    - Honeygrow - 1601 Market Street, Philadelphia
+    - Taco Bell #1234 - Times Square, NYC
+
+    **API Access:** A Restaurant Key gives access to that location's menus only.
+  </Accordion>
+
+  <Accordion title="Menu" icon="utensils">
+    A collection of dishes available at a restaurant. A single restaurant may have multiple menus.
+
+    **Examples:**
+    - Breakfast Menu
+    - Lunch/Dinner Menu
+    - Late Night Menu
+    - Regional Specials
+    - Seasonal Menu
+  </Accordion>
+</AccordionGroup>
+
+## Menu Variations by Scale
+
+How menus vary depends on the size of the restaurant operation:
+
+| Scale | Location Count | Menu Strategy |
+|-------|----------------|---------------|
+| Small Chain | 20-50 | Single menu across all locations |
+| Regional Chain | 50-200 | Regional menu variations |
+| National Chain | 200+ | Definitely regional menus |
+| Global Chain | International | Different menus per country/region |
+
+<Info>
+A chain with 30 locations might have identical menus everywhere. A national chain with 500+ locations will likely have regional differences—some items available only in certain markets.
+</Info>
+
+## Querying at Different Levels
+
+Your Menu Key determines what you can query:
+
+<Tabs>
+  <Tab title="Restaurant Scope">
+    ```graphql
+    # With a Restaurant Key, query dishes at your location
+    query {
+      dishes(menuKey: "rest_abc123") {
+        results {
+          dish { name, calories }
+        }
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Chain Scope">
+    ```graphql
+    # With a Chain Key, query across all locations
+    query {
+      dishes(menuKey: "chain_xyz789") {
+        results {
+          dish { name, calories }
+          # Can filter by specific location if needed
+        }
+      }
+    }
+
+    # Or list all restaurants in the chain
+    query {
+      restaurants(menuKey: "chain_xyz789") {
+        id
+        name
+        address { city, state }
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Brand Scope">
+    ```graphql
+    # With a Brand Key, access all chains
+    query {
+      chains(menuKey: "brand_mega456") {
+        id
+        name
+        restaurantCount
+      }
+    }
+
+    # Query dishes across all chains (if supported)
+    query {
+      dishes(
+        menuKey: "brand_mega456",
+        filters: { diets: [Vegan] }
+      ) {
+        results {
+          dish { name }
+          chain { name }  # Which chain this dish belongs to
+        }
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Location-Specific Menus
+
+When a chain has location-specific menus, you can filter dishes by restaurant:
+
+```graphql
+query {
+  dishes(
+    menuKey: "chain_xyz789",
+    filters: {
+      restaurantId: "rest_nyc_001"  # Only dishes at this location
+    }
+  ) {
+    results {
+      dish { name }
+    }
+  }
+}
+```
+
+## Categories Within Menus
+
+Each menu contains categories that organize dishes:
+
+```graphql
+query {
+  categories(menuKey: "your_key") {
+    id
+    name        # e.g., "Stir-Fry", "Salads", "Drinks"
+    dishCount   # Number of dishes in this category
+    ordinal     # Display order
+  }
+}
+```
+
+## Visual Summary
+
+<Frame>
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         BRAND                                    │
+│                    (Yum! Brands)                                 │
+│                    [Brand Key]                                   │
+├───────────────┬─────────────────┬───────────────────────────────┤
+│    CHAIN      │     CHAIN       │           CHAIN               │
+│  Taco Bell    │      KFC        │        Pizza Hut              │
+│ [Chain Key]   │   [Chain Key]   │       [Chain Key]             │
+├───────────────┼─────────────────┼───────────────────────────────┤
+│  Restaurants  │   Restaurants   │       Restaurants             │
+│  ├── NYC #1   │   ├── LA #1     │       ├── Chicago #1          │
+│  ├── NYC #2   │   ├── LA #2     │       ├── Chicago #2          │
+│  └── etc.     │   └── etc.      │       └── etc.                │
+│ [Rest Keys]   │  [Rest Keys]    │      [Rest Keys]              │
+├───────────────┴─────────────────┴───────────────────────────────┤
+│                         MENUS                                    │
+│        Breakfast | Lunch | Dinner | Regional | Seasonal          │
+└─────────────────────────────────────────────────────────────────┘
+```
+</Frame>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Diner Preferences" icon="sliders" href="/concepts/diner-preferences">
+    Learn how to personalize results
+  </Card>
+  <Card title="Authentication" icon="key" href="/authentication">
+    Understand Menu Keys in depth
+  </Card>
+</CardGroup>

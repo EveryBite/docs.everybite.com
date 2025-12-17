@@ -1,0 +1,264 @@
+---
+title: Restaurant
+description: Location data with address, hours, and menus
+---
+
+# Restaurant
+
+A **Restaurant** represents a single physical location where diners can order food.
+
+## Schema
+
+```graphql
+type Restaurant {
+  id: ID!
+  name: String!
+
+  # Address
+  street: String!
+  city: String!
+  state: String!
+  stateCode: String!
+  zipCode: String!
+  country: String!
+  countryCode: String
+
+  # Coordinates
+  latitude: Float!
+  longitude: Float!
+
+  # Contact
+  phoneNumber: String
+  websiteUrl: URL
+  logoUrl: URL
+  description: String
+
+  # Status
+  isOpen: Boolean
+  isPermanentlyClosed: Boolean
+
+  # Hours
+  operatingHours: [OperatingHours!]!
+
+  # Related
+  menus: [Menu!]!
+  cuisines: [Cuisine!]!
+  chain: Chain
+
+  # Metadata
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+```
+
+## Key Fields
+
+### Location
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `street` | String | Street address |
+| `city` | String | City name |
+| `state` | String | Full state name |
+| `stateCode` | String | State abbreviation (e.g., "PA") |
+| `zipCode` | String | Postal code |
+| `country` | String | Country name |
+| `latitude` | Float | GPS latitude |
+| `longitude` | Float | GPS longitude |
+
+### Contact
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `phoneNumber` | String | Contact phone |
+| `websiteUrl` | URL | Restaurant website |
+| `logoUrl` | URL | Location-specific logo |
+
+### Status
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `isOpen` | Boolean | Currently open right now? |
+| `isPermanentlyClosed` | Boolean | Has this location closed? |
+
+## Example Query
+
+```graphql
+query GetRestaurant($id: ID!) {
+  restaurant(menuKey: "your_key", id: $id) {
+    id
+    name
+    street
+    city
+    state
+    zipCode
+    latitude
+    longitude
+    phoneNumber
+    isOpen
+    operatingHours {
+      day
+      openTime
+      closeTime
+    }
+    menus {
+      id
+      name
+    }
+  }
+}
+```
+
+## Example Response
+
+```json
+{
+  "data": {
+    "restaurant": {
+      "id": "rest_123",
+      "name": "Honeygrow - Market Street",
+      "street": "1601 Market Street",
+      "city": "Philadelphia",
+      "state": "Pennsylvania",
+      "zipCode": "19103",
+      "latitude": 39.9526,
+      "longitude": -75.1652,
+      "phoneNumber": "(215) 555-0123",
+      "isOpen": true,
+      "operatingHours": [
+        { "day": "Monday", "openTime": "10:30", "closeTime": "21:00" },
+        { "day": "Tuesday", "openTime": "10:30", "closeTime": "21:00" },
+        { "day": "Wednesday", "openTime": "10:30", "closeTime": "21:00" }
+      ],
+      "menus": [
+        { "id": "menu_main", "name": "Main Menu" }
+      ]
+    }
+  }
+}
+```
+
+## Operating Hours
+
+```graphql
+type OperatingHours {
+  day: DayOfWeek!     # Monday, Tuesday, etc.
+  openTime: String!   # "10:30" (24-hour format)
+  closeTime: String!  # "21:00" (24-hour format)
+}
+```
+
+<Info>
+If `closeTime` is earlier than `openTime`, the restaurant is open past midnight (e.g., "22:00" to "02:00").
+</Info>
+
+## Listing Restaurants
+
+### All Restaurants in a Chain
+
+```graphql
+query GetRestaurants {
+  restaurants(menuKey: "chain_key") {
+    edges {
+      node {
+        id
+        name
+        city
+        state
+        isOpen
+      }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    totalCount
+  }
+}
+```
+
+### Find Nearby Restaurants
+
+```graphql
+query GetNearbyRestaurants(
+  $lat: Float!,
+  $lng: Float!,
+  $radiusMiles: Float
+) {
+  restaurants(
+    menuKey: "chain_key",
+    near: { latitude: $lat, longitude: $lng, radiusMiles: $radiusMiles }
+  ) {
+    edges {
+      node {
+        id
+        name
+        city
+        distance  # Miles from search point
+        isOpen
+      }
+    }
+  }
+}
+```
+
+## Restaurant-Specific Dishes
+
+When querying dishes, you can filter by restaurant to get location-specific menus:
+
+```graphql
+query {
+  dishes(
+    menuKey: "chain_key",
+    filters: {
+      restaurantId: "rest_123"  # Only dishes at this location
+    }
+  ) {
+    results {
+      dish { name }
+    }
+  }
+}
+```
+
+This is useful for chains with regional menu variations.
+
+## Display Patterns
+
+### Location Selector
+
+<Frame>
+![Location Selector](/images/smartmenu-screenshots/09-order-modal-pickup-location.png)
+</Frame>
+
+Show restaurants with:
+- Name
+- Address
+- Distance from user
+- Open/closed status
+- Operating hours
+
+### Map Integration
+
+Use `latitude` and `longitude` to plot locations on a map:
+
+```jsx
+restaurants.map(r => (
+  <Marker
+    key={r.id}
+    position={[r.latitude, r.longitude]}
+    title={r.name}
+  />
+))
+```
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Chain" icon="link" href="/concepts/hierarchy">
+    Parent chain relationship
+  </Card>
+  <Card title="Category" icon="folder" href="/menu-api/data-objects/category">
+    Menu organization
+  </Card>
+</CardGroup>

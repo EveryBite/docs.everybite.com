@@ -1,0 +1,163 @@
+---
+title: Category
+description: Menu organization and groupings
+---
+
+# Category
+
+A **Category** organizes dishes into logical groups within a menu (e.g., "Stir-Fry", "Salads", "Drinks").
+
+## Schema
+
+```graphql
+type Category {
+  id: ID!
+  name: String!
+  dishCount: Int
+  ordinal: Int
+}
+```
+
+## Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | ID | Unique identifier |
+| `name` | String | Category name (e.g., "Stir-Fry") |
+| `dishCount` | Int | Number of dishes in this category |
+| `ordinal` | Int | Display order (lower = first) |
+
+## Example Query
+
+```graphql
+query GetCategories {
+  categories(menuKey: "your_key") {
+    id
+    name
+    dishCount
+    ordinal
+  }
+}
+```
+
+## Example Response
+
+```json
+{
+  "data": {
+    "categories": [
+      { "id": "cat_1", "name": "Stir-Fry", "dishCount": 12, "ordinal": 1 },
+      { "id": "cat_2", "name": "Salad", "dishCount": 8, "ordinal": 2 },
+      { "id": "cat_3", "name": "Honeybar", "dishCount": 6, "ordinal": 3 },
+      { "id": "cat_4", "name": "Kids Menu", "dishCount": 4, "ordinal": 4 },
+      { "id": "cat_5", "name": "Extras", "dishCount": 10, "ordinal": 5 },
+      { "id": "cat_6", "name": "Drinks", "dishCount": 15, "ordinal": 6 }
+    ]
+  }
+}
+```
+
+## Filtering by Category
+
+Get dishes in a specific category:
+
+```graphql
+query GetDishesByCategory($categoryId: ID!) {
+  dishes(
+    menuKey: "your_key",
+    filters: {
+      category: $categoryId
+    }
+  ) {
+    results {
+      dish {
+        id
+        name
+        calories
+      }
+    }
+  }
+}
+```
+
+## Dynamic Category Counts
+
+When filtering with diner preferences, category counts update to reflect matching dishes:
+
+```graphql
+query GetCategoriesWithFilters {
+  categories(
+    menuKey: "your_key",
+    dinerPreferences: {
+      diets: [Vegan],
+      excludeAllergens: [Dairy]
+    }
+  ) {
+    id
+    name
+    dishCount  # Now shows only vegan, dairy-free dishes
+  }
+}
+```
+
+## Display Patterns
+
+### Category Tabs
+
+<Frame>
+![Category Tabs](/images/smartmenu-screenshots/02-search-results-partial-match.png)
+</Frame>
+
+Categories typically display as horizontal tabs:
+
+```jsx
+<div className="category-tabs">
+  <button className="active">My matches</button>
+  {categories.map(cat => (
+    <button key={cat.id}>
+      {cat.name}
+      {showCounts && <span className="count">{cat.dishCount}</span>}
+    </button>
+  ))}
+</div>
+```
+
+### Special "My Matches" Tab
+
+The SmartMenu includes a special "My matches" tab that shows all dishes matching the diner's preferences, regardless of category:
+
+```graphql
+query GetMyMatches {
+  dishes(
+    menuKey: "your_key",
+    dinerPreferences: { ... },
+    filters: {
+      matchStatus: [MATCH, PARTIAL_MATCH]
+    }
+  ) {
+    results {
+      dish { name, category { name } }
+      matchStatus
+    }
+  }
+}
+```
+
+## Category Order
+
+Use the `ordinal` field to sort categories in display order:
+
+```javascript
+const sortedCategories = categories.sort((a, b) => a.ordinal - b.ordinal);
+```
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Dish" icon="bowl-food" href="/menu-api/data-objects/dish">
+    Dishes within categories
+  </Card>
+  <Card title="Filter Function" icon="filter" href="/menu-api/functions/filter">
+    Filter dishes by category
+  </Card>
+</CardGroup>

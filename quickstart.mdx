@@ -1,0 +1,201 @@
+---
+title: Quickstart
+description: Make your first EveryBite API call in minutes
+---
+
+# Quickstart
+
+Get up and running with the EveryBite API in just a few minutes.
+
+## Prerequisites
+
+- An EveryBite developer account
+- A Menu Key for your authorized brand
+
+<Info>
+Don't have a Menu Key yet? [Sign up](https://developer.everybite.com) and request access to a brand's menu data.
+</Info>
+
+## Step 1: Get Your Menu Key
+
+Your Menu Key identifies which restaurant brand's menu data your app can access. You'll receive this when your access request is approved.
+
+```bash
+# Your Menu Key looks like this:
+MENU_KEY="hg_live_abc123def456..."
+```
+
+## Step 2: Set Up Your Environment
+
+The EveryBite API is GraphQL-based. You can use any GraphQL client or simple HTTP requests.
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://api.everybite.com/graphql \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_MENU_KEY" \
+  -d '{"query": "{ __typename }"}'
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.everybite.com/graphql', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${MENU_KEY}`
+  },
+  body: JSON.stringify({
+    query: `{ __typename }`
+  })
+});
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://api.everybite.com/graphql',
+    headers={
+        'Content-Type': 'application/json',
+        'Authorization': f'Bearer {MENU_KEY}'
+    },
+    json={'query': '{ __typename }'}
+)
+```
+</CodeGroup>
+
+## Step 3: Fetch Available Filters
+
+Before building your filter UI, discover what options are available:
+
+```graphql
+query GetFilterOptions {
+  filterOptions(menuKey: "your_menu_key") {
+    diets {
+      type
+      displayName
+    }
+    allergens {
+      type
+      displayName
+      icon
+    }
+    nutrients {
+      type
+      displayName
+      unit
+      defaultMin
+      defaultMax
+    }
+    categories {
+      id
+      name
+      dishCount
+    }
+  }
+}
+```
+
+<Accordion title="Example Response">
+```json
+{
+  "data": {
+    "filterOptions": {
+      "diets": [
+        { "type": "Vegan", "displayName": "Vegan" },
+        { "type": "Vegetarian", "displayName": "Vegetarian" },
+        { "type": "GlutenFree", "displayName": "Gluten-Free" }
+      ],
+      "allergens": [
+        { "type": "Dairy", "displayName": "Dairy", "icon": "🥛" },
+        { "type": "Peanut", "displayName": "Peanut", "icon": "🥜" },
+        { "type": "Gluten", "displayName": "Gluten", "icon": "🌾" }
+      ],
+      "categories": [
+        { "id": "cat_1", "name": "Stir-Fry", "dishCount": 12 },
+        { "id": "cat_2", "name": "Salads", "dishCount": 8 }
+      ]
+    }
+  }
+}
+```
+</Accordion>
+
+## Step 4: Query Dishes with Filters
+
+Now fetch dishes that match your diner's preferences:
+
+```graphql
+query GetDishes {
+  dishes(
+    menuKey: "your_menu_key",
+    filters: {
+      diets: [Vegan],
+      excludeAllergens: [Dairy, Egg],
+      calorieRange: { max: 600 }
+    },
+    pagination: { first: 20 }
+  ) {
+    results {
+      dish {
+        id
+        name
+        description
+        imageUrl
+        calories
+        nutrition {
+          protein
+          carbohydrates
+          fatTotal
+        }
+        allergens { type, displayName }
+        diets { type }
+      }
+      matchStatus
+    }
+    counts {
+      total
+      matches
+      partialMatches
+      notAMatch
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}
+```
+
+## Step 5: Display Results
+
+Use the response to build your UI:
+
+```javascript
+const { results, counts } = data.dishes;
+
+// Show match summary
+console.log(`${counts.matches} Match | ${counts.partialMatches} Partial | ${counts.notAMatch} Not a Match`);
+
+// Render dish cards
+results.forEach(({ dish, matchStatus }) => {
+  console.log(`${dish.name} - ${dish.calories} cal - ${matchStatus}`);
+});
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Core Concepts" icon="book" href="/concepts/hierarchy">
+    Understand how the data model works
+  </Card>
+  <Card title="Search Function" icon="magnifying-glass" href="/menu-api/functions/search">
+    Add keyword search with autocomplete
+  </Card>
+  <Card title="Nutrition Calculator" icon="calculator" href="/menu-api/functions/nutrition-calculator">
+    Handle customizable dishes
+  </Card>
+  <Card title="Passport Integration" icon="passport" href="/passport/overview">
+    Add user profiles and preferences
+  </Card>
+</CardGroup>

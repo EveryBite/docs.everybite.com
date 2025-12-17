@@ -1,0 +1,87 @@
+---
+title: Ordering API
+description: Cart, checkout, and fulfillment
+sidebarTitle: Overview
+---
+
+# Ordering API
+
+<Info>
+The Ordering API is a separate product. Contact sales@everybite.com for access.
+</Info>
+
+The Ordering API enables cart management, checkout, and order fulfillment for EveryBite-enabled restaurants.
+
+## Capabilities
+
+<CardGroup cols={2}>
+  <Card title="Cart Management" icon="cart-shopping">
+    Add dishes, manage quantities, apply customizations
+  </Card>
+  <Card title="Order Types" icon="truck">
+    Pickup and delivery support
+  </Card>
+  <Card title="Location Selection" icon="location-dot">
+    Find restaurants, check availability, schedule orders
+  </Card>
+  <Card title="Checkout" icon="credit-card">
+    Payment processing, tips, order confirmation
+  </Card>
+</CardGroup>
+
+## Integration with Menu API
+
+The Ordering API works seamlessly with the Menu API:
+
+```graphql
+# 1. Query dishes with Menu API
+query {
+  dishes(menuKey: "...", filters: {...}) {
+    results { dish { id, name, price } }
+  }
+}
+
+# 2. Add to cart with Ordering API
+mutation {
+  addToCart(dishId: "dish_123", quantity: 1) {
+    cart { items { ... } }
+  }
+}
+```
+
+## Integration with Passport
+
+When a diner has an EveryBite Passport:
+
+- **Saved addresses** auto-populate for delivery
+- **Loyalty programs** apply automatically
+- **Meal history** records the order
+- **Preferences** ensure allergen warnings display
+
+## Preview
+
+<Frame>
+![Order Modal](/images/smartmenu-screenshots/09-order-modal-pickup-location.png)
+</Frame>
+
+<Frame>
+![Checkout](/images/smartmenu-screenshots/12-checkout-page.png)
+</Frame>
+
+## Coming Soon
+
+Full documentation for the Ordering API including:
+
+- Cart operations
+- Order types (pickup, delivery, dine-in)
+- Restaurant availability
+- Time slot scheduling
+- Payment processing
+- Order tracking
+- Webhook notifications
+
+## Request Access
+
+<Card title="Contact Sales" icon="envelope" href="mailto:sales@everybite.com">
+  Interested in the Ordering API? Contact our sales team.
+</Card>

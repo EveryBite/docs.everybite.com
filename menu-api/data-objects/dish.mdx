@@ -1,0 +1,279 @@
+---
+title: Dish
+description: Menu item with nutrition, allergens, and dietary information
+---
+
+# Dish
+
+A **Dish** represents a menu item with complete nutrition data, allergen information, and dietary classifications.
+
+## Schema
+
+```graphql
+type Dish {
+  id: ID!
+  name: String!
+  description: String
+  imageUrl: URL
+
+  # Nutrition
+  calories: Int
+  nutrition: Nutrition
+  servingSize: String
+  servingSizeGrams: Float
+
+  # Classifications
+  allergens: [Allergen!]!
+  diets: [Diet!]!
+  cuisines: [Cuisine!]!
+  preparationTypes: [PreparationType!]!
+  styles: [Style!]!
+
+  # Organization
+  category: Category
+  menu: Menu
+
+  # Customization
+  isCustomizable: Boolean!
+  customizationOptions: [CustomizationGroup!]
+
+  # Related
+  substitutions: [Dish!]
+  addedIngredients: [Ingredient!]
+  removedIngredients: [Ingredient!]
+
+  # Metadata
+  createdAt: DateTime
+  updatedAt: DateTime
+}
+```
+
+## Key Fields
+
+### Basic Information
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | ID | Unique identifier |
+| `name` | String | Display name (e.g., "Red Coconut Curry") |
+| `description` | String | Menu description |
+| `imageUrl` | URL | High-quality dish photo |
+| `category` | Category | Menu category (Stir-Fry, Salads, etc.) |
+
+### Nutrition
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `calories` | Int | Total calories (shorthand) |
+| `nutrition` | Nutrition | Full nutrition breakdown |
+| `servingSize` | String | Human-readable (e.g., "1 bowl (425g)") |
+| `servingSizeGrams` | Float | Serving size in grams |
+
+See [Nutrition](/menu-api/data-objects/nutrition) for the full nutrition object.
+
+### Classifications
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `allergens` | [Allergen] | Allergens present in dish |
+| `diets` | [Diet] | Compatible diets (Vegan, GlutenFree, etc.) |
+| `cuisines` | [Cuisine] | Cuisine types (Mexican, Asian, etc.) |
+| `preparationTypes` | [PreparationType] | How it's prepared (Grilled, Fried, etc.) |
+| `styles` | [Style] | Presentation style |
+
+### Customization
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `isCustomizable` | Boolean | Can this dish be customized? |
+| `customizationOptions` | [CustomizationGroup] | Available modifications |
+
+## Example Query
+
+```graphql
+query GetDish($id: ID!) {
+  dish(menuKey: "your_key", id: $id) {
+    id
+    name
+    description
+    imageUrl
+    calories
+
+    nutrition {
+      protein
+      carbohydrates
+      fatTotal
+      sodium
+    }
+
+    allergens {
+      type
+      displayName
+      confidence
+    }
+
+    diets {
+      type
+      displayName
+    }
+
+    category {
+      name
+    }
+
+    isCustomizable
+  }
+}
+```
+
+## Example Response
+
+```json
+{
+  "data": {
+    "dish": {
+      "id": "dish_123",
+      "name": "Red Coconut Curry (v, gf)",
+      "description": "Spicy coconut curry with fresh vegetables over your choice of base",
+      "imageUrl": "https://cdn.everybite.com/dishes/red-coconut-curry.jpg",
+      "calories": 530,
+      "nutrition": {
+        "protein": 18,
+        "carbohydrates": 52,
+        "fatTotal": 24,
+        "sodium": 890
+      },
+      "allergens": [
+        { "type": "Soy", "displayName": "Soy", "confidence": 0.95 }
+      ],
+      "diets": [
+        { "type": "Vegan", "displayName": "Vegan" },
+        { "type": "GlutenFree", "displayName": "Gluten-Free" }
+      ],
+      "category": {
+        "name": "Stir-Fry"
+      },
+      "isCustomizable": true
+    }
+  }
+}
+```
+
+## Allergens
+
+Each allergen includes a confidence score:
+
+```graphql
+type Allergen {
+  type: AllergenType!      # Enum: Dairy, Egg, Fish, etc.
+  displayName: String!     # Human-readable name
+  icon: URL               # Icon for UI display
+  confidence: Float       # 0-1 detection confidence
+}
+```
+
+<Warning>
+Always display allergen warnings prominently. A confidence score below 1.0 means the allergen may be present based on ingredient analysis. Encourage diners to verify with restaurant staff.
+</Warning>
+
+### AllergenType Enum
+
+```graphql
+enum AllergenType {
+  Dairy
+  Egg
+  Fish
+  Shellfish
+  Wheat
+  TreeNut
+  Peanut
+  Sesame
+  Soy
+  Gluten
+}
+```
+
+## Diets
+
+```graphql
+type Diet {
+  type: DietType!
+  displayName: String!
+}
+
+enum DietType {
+  Vegan
+  Vegetarian
+  Pescatarian
+  GlutenFree
+  DairyFree
+}
+```
+
+## Customizable Dishes
+
+For dishes where `isCustomizable: true`, query the customization options:
+
+```graphql
+query GetCustomizableDish($id: ID!) {
+  dish(menuKey: "your_key", id: $id) {
+    name
+    isCustomizable
+    customizationOptions {
+      id
+      name           # "Base", "Protein", "Sauce"
+      required       # Must select one?
+      minSelections  # Minimum selections
+      maxSelections  # Maximum selections
+      options {
+        id
+        name         # "Brown Rice", "Egg Noodles"
+        calories
+        price        # Additional cost
+        allergens { type }
+        diets { type }
+      }
+    }
+  }
+}
+```
+
+Use the [Nutrition Calculator](/menu-api/functions/nutrition-calculator) to compute nutrition as the diner makes selections.
+
+## Display Patterns
+
+### Diet Abbreviations in Names
+
+Many dishes include diet indicators in their name:
+
+- `(v)` = Vegan
+- `(vg)` = Vegetarian
+- `(gf)` = Gluten-Free
+- `(v, gf)` = Vegan and Gluten-Free
+
+Example: **"Red Coconut Curry (v, gf)"**
+
+### Dish Card
+
+<Frame>
+![Dish Card](/images/smartmenu-screenshots/04-dish-details-modal-nutrition.png)
+</Frame>
+
+A typical dish card shows:
+- Image with favorite button
+- Name with diet indicators
+- Category label
+- Calories
+- Match status badge
+- Order button
+
+## Related Objects
+
+<CardGroup cols={2}>
+  <Card title="Nutrition" icon="chart-pie" href="/menu-api/data-objects/nutrition">
+    Full nutrition breakdown
+  </Card>
+  <Card title="Category" icon="folder" href="/menu-api/data-objects/category">
+    Menu organization
+  </Card>
+</CardGroup>

@@ -1,0 +1,88 @@
+---
+title: Introduction
+description: Build personalized dining experiences with the EveryBite platform
+---
+
+# Welcome to EveryBite
+
+EveryBite provides APIs and tools for building personalized dining experiences with nutrition data, dietary filtering, allergen safety, and seamless loyalty integration.
+
+## Our Platform
+
+<CardGroup cols={3}>
+  <Card title="Menu API" icon="utensils" href="/menu-api/overview">
+    Access menu data, search, filter, and calculate nutrition for any dish
+  </Card>
+  <Card title="Passport" icon="passport" href="/passport/overview">
+    The universal dining identity - preferences, history, and loyalty in one place
+  </Card>
+  <Card title="Ordering API" icon="bag-shopping" href="/ordering-api/overview">
+    Cart, checkout, and fulfillment integration
+  </Card>
+</CardGroup>
+
+## What You Can Build
+
+### Personalized Menu Experiences
+Give diners menus that understand their dietary needs. Filter by vegan, gluten-free, or any dietary preference. Exclude allergens automatically. Show nutrition information that matters.
+
+### Allergen-Safe Dining
+Protect your diners with comprehensive allergen detection. Our Match Status system tells you exactly which dishes are safe, which can be modified, and which to avoid.
+
+### Build-Your-Own Dishes
+Support customizable dishes with real-time nutrition calculation. As diners select their base, toppings, and sauces, see nutrition and allergen information update instantly.
+
+### Cross-Restaurant Profiles
+With EveryBite Passport, diners carry their preferences everywhere. Set allergies once, and they're known at every participating restaurant.
+
+### Unified Loyalty
+Connect multiple loyalty programs under one Passport. Diners earn and redeem rewards seamlessly across brands.
+
+## Quick Example
+
+Fetch vegan dishes under 600 calories, excluding dairy:
+
+```graphql
+query {
+  dishes(
+    menuKey: "your_menu_key",
+    filters: {
+      diets: [Vegan],
+      excludeAllergens: [Dairy],
+      calorieRange: { max: 600 }
+    }
+  ) {
+    results {
+      dish {
+        name
+        calories
+        nutrition { protein, carbohydrates, fatTotal }
+      }
+      matchStatus
+    }
+    counts { matches, partialMatches }
+  }
+}
+```
+
+## Getting Started
+
+<Steps>
+  <Step title="Get Your Keys">
+    Sign up at [developer.everybite.com](https://developer.everybite.com) and request access to a brand's menu data.
+  </Step>
+  <Step title="Explore the API">
+    Use our [Quickstart Guide](/quickstart) to make your first API call.
+  </Step>
+  <Step title="Build Your Experience">
+    Follow our guides to implement search, filtering, and nutrition features.
+  </Step>
+</Steps>
+
+## Core Concepts
+
+Before diving in, understand these key concepts:
+
+- **[Hierarchy](/concepts/hierarchy)** - How Brands, Chains, Restaurants, and Menus relate
+- **[Diner Preferences](/concepts/diner-preferences)** - How personalization works
+- **[Match Status](/concepts/match-status)** - Understanding Match, Partial Match, and Not a Match

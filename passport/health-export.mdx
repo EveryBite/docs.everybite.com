@@ -1,0 +1,230 @@
+---
+title: Health Export
+description: Export dining data to health apps
+---
+
+# Health Export
+
+Passport can export meal and nutrition data to popular health and fitness apps, helping diners track their overall diet without manual entry.
+
+## Supported Platforms
+
+| Platform | Status | Data Exported |
+|----------|--------|---------------|
+| Apple Health | Supported | Calories, nutrients, meal times |
+| Google Fit | Supported | Calories, macros |
+| MyFitnessPal | Planned | Full nutrition |
+| Generic Export | Supported | CSV, JSON |
+
+## Connecting Apple Health
+
+```graphql
+mutation ConnectAppleHealth($token: String!, $authCode: String!) {
+  connectHealthApp(
+    token: $token,
+    platform: APPLE_HEALTH,
+    authCode: $authCode
+  ) {
+    connection {
+      id
+      platform
+      status
+      connectedAt
+    }
+  }
+}
+```
+
+### iOS Implementation
+
+```swift
+import HealthKit
+
+func connectToEveryBite() {
+    let healthStore = HKHealthStore()
+
+    let typesToShare: Set = [
+        HKObjectType.quantityType(forIdentifier: .dietaryEnergyConsumed)!,
+        HKObjectType.quantityType(forIdentifier: .dietaryProtein)!,
+        HKObjectType.quantityType(forIdentifier: .dietaryCarbohydrates)!,
+        HKObjectType.quantityType(forIdentifier: .dietaryFatTotal)!
+    ]
+
+    healthStore.requestAuthorization(toShare: typesToShare, read: nil) { success, error in
+        if success {
+            // Send authorization to EveryBite API
+            self.sendAuthToEveryBite()
+        }
+    }
+}
+```
+
+## Connecting Google Fit
+
+```graphql
+mutation ConnectGoogleFit($token: String!, $authCode: String!) {
+  connectHealthApp(
+    token: $token,
+    platform: GOOGLE_FIT,
+    authCode: $authCode
+  ) {
+    connection {
+      id
+      platform
+      status
+    }
+  }
+}
+```
+
+## Checking Connection Status
+
+```graphql
+query GetHealthConnections($token: String!) {
+  passport(token: $token) {
+    healthConnections {
+      platform
+      status       # CONNECTED, DISCONNECTED, PENDING
+      connectedAt
+      lastSyncAt
+    }
+  }
+}
+```
+
+## Sync Behavior
+
+### Automatic Sync
+
+When enabled, meals sync automatically:
+
+1. **Diner completes order** at a restaurant
+2. **Meal recorded** in Passport history
+3. **Data pushed** to connected health apps
+4. **Appears in** Apple Health, Google Fit, etc.
+
+### Manual Sync
+
+Trigger a sync for historical data:
+
+```graphql
+mutation SyncToHealthApp(
+  $token: String!,
+  $platform: HealthPlatform!,
+  $dateFrom: Date,
+  $dateTo: Date
+) {
+  syncToHealthApp(
+    token: $token,
+    platform: $platform,
+    dateRange: { from: $dateFrom, to: $dateTo }
+  ) {
+    syncedMeals
+    status
+  }
+}
+```
+
+## Data Exported
+
+Each meal exports:
+
+| Field | Apple Health | Google Fit |
+|-------|--------------|------------|
+| Calories | `dietaryEnergyConsumed` | `calories.expended` |
+| Protein | `dietaryProtein` | `nutrition.protein` |
+| Carbs | `dietaryCarbohydrates` | `nutrition.carbs` |
+| Fat | `dietaryFatTotal` | `nutrition.fat` |
+| Meal time | `startDate` | `startTime` |
+| Meal type | `metadata.mealType` | `mealType` |
+
+## Generic Export
+
+Export data as CSV or JSON for use in other apps:
+
+```graphql
+mutation ExportMealData(
+  $token: String!,
+  $format: ExportFormat!,
+  $dateFrom: Date,
+  $dateTo: Date
+) {
+  exportMealData(
+    token: $token,
+    format: $format,  # CSV or JSON
+    dateRange: { from: $dateFrom, to: $dateTo }
+  ) {
+    downloadUrl
+    expiresAt
+  }
+}
+```
+
+### CSV Format
+
+```csv
+date,meal_name,restaurant,calories,protein_g,carbs_g,fat_g
+2025-12-16,Red Coconut Curry,Honeygrow,530,18,52,24
+2025-12-15,Pomegranate Acai Salad,Honeygrow,400,12,45,20
+```
+
+### JSON Format
+
+```json
+{
+  "meals": [
+    {
+      "date": "2025-12-16T18:30:00Z",
+      "name": "Red Coconut Curry",
+      "restaurant": "Honeygrow",
+      "nutrition": {
+        "calories": 530,
+        "protein": 18,
+        "carbohydrates": 52,
+        "fat": 24
+      }
+    }
+  ]
+}
+```
+
+## Disconnecting
+
+```graphql
+mutation DisconnectHealthApp($token: String!, $platform: HealthPlatform!) {
+  disconnectHealthApp(token: $token, platform: $platform) {
+    success
+  }
+}
+```
+
+<Warning>
+Disconnecting stops future syncs but does not delete data already exported to the health app. Users must delete that data directly in the health app if desired.
+</Warning>
+
+## Privacy
+
+<AccordionGroup>
+  <Accordion title="User consent required">
+    Health export requires explicit user consent. The connection flow includes clear permission requests.
+  </Accordion>
+
+  <Accordion title="Data minimization">
+    Only nutrition data is exported. No restaurant names, dish details, or location data is sent to health platforms.
+  </Accordion>
+
+  <Accordion title="User controls">
+    Users can disconnect at any time, stopping all future exports.
+  </Accordion>
+</AccordionGroup>
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Meal History" icon="clock-rotate-left" href="/passport/meal-history">
+    View tracked meals
+  </Card>
+  <Card title="Passport Overview" icon="passport" href="/passport/overview">
+    The universal dining identity
+  </Card>
+</CardGroup>

@@ -1,0 +1,136 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "EveryBite Developer Documentation",
+  "logo": {
+    "light": "/images/logo-light.svg",
+    "dark": "/images/logo-dark.svg"
+  },
+  "favicon": "/images/favicon.svg",
+  "colors": {
+    "primary": "#2563EB",
+    "light": "#3B82F6",
+    "dark": "#1D4ED8"
+  },
+  "navbar": {
+    "primary": {
+      "type": "button",
+      "label": "Dashboard",
+      "href": "https://developer.everybite.com"
+    },
+    "links": [
+      {
+        "label": "Support",
+        "href": "mailto:support@everybite.com"
+      }
+    ]
+  },
+  "navigation": {
+    "languages": [
+      {
+        "language": "en",
+        "tabs": [
+          {
+            "tab": "Documentation",
+            "groups": [
+              {
+                "group": "Getting Started",
+                "pages": [
+                  "introduction",
+                  "quickstart",
+                  "authentication"
+                ]
+              },
+              {
+                "group": "Core Concepts",
+                "pages": [
+                  "concepts/hierarchy",
+                  "concepts/diner-preferences",
+                  "concepts/match-status"
+                ]
+              }
+            ]
+          },
+          {
+            "tab": "Menu API",
+            "groups": [
+              {
+                "group": "Menu API",
+                "pages": [
+                  "menu-api/overview"
+                ]
+              },
+              {
+                "group": "Data Objects",
+                "pages": [
+                  "menu-api/data-objects/dish",
+                  "menu-api/data-objects/nutrition",
+                  "menu-api/data-objects/restaurant",
+                  "menu-api/data-objects/category"
+                ]
+              },
+              {
+                "group": "Functions",
+                "pages": [
+                  "menu-api/functions/search",
+                  "menu-api/functions/filter",
+                  "menu-api/functions/nutrition-calculator",
+                  "menu-api/functions/match-status"
+                ]
+              }
+            ]
+          },
+          {
+            "tab": "Passport",
+            "groups": [
+              {
+                "group": "Passport",
+                "pages": [
+                  "passport/overview",
+                  "passport/preferences",
+                  "passport/saved-dishes",
+                  "passport/meal-history",
+                  "passport/health-export",
+                  "passport/loyalty"
+                ]
+              }
+            ]
+          },
+          {
+            "tab": "Ordering API",
+            "groups": [
+              {
+                "group": "Ordering API",
+                "pages": [
+                  "ordering-api/overview"
+                ]
+              }
+            ]
+          },
+          {
+            "tab": "API Reference",
+            "groups": [
+              {
+                "group": "API Reference",
+                "pages": [
+                  "api-reference/overview"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "footer": {
+    "socials": {
+      "twitter": "https://twitter.com/everybite",
+      "github": "https://github.com/everybite",
+      "linkedin": "https://linkedin.com/company/everybite"
+    }
+  },
+  "feedback": {
+    "thumbsRating": true,
+    "suggestEdit": true
+  }
+}

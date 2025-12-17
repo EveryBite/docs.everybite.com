@@ -1,0 +1,136 @@
+---
+title: Menu API Overview
+description: Access menu data, search, filter, and calculate nutrition
+sidebarTitle: Overview
+---
+
+# Menu API
+
+The Menu API gives you access to restaurant menu data with powerful search, filtering, and nutrition calculation capabilities.
+
+## What You Can Do
+
+<CardGroup cols={2}>
+  <Card title="Search Dishes" icon="magnifying-glass" href="/menu-api/functions/search">
+    Keyword search with autocomplete suggestions
+  </Card>
+  <Card title="Filter by Preferences" icon="filter" href="/menu-api/functions/filter">
+    Dietary restrictions, allergens, calories, nutrients
+  </Card>
+  <Card title="Calculate Nutrition" icon="calculator" href="/menu-api/functions/nutrition-calculator">
+    Real-time nutrition for customizable dishes
+  </Card>
+  <Card title="Get Match Status" icon="circle-check" href="/menu-api/functions/match-status">
+    Match, Partial Match, or Not a Match
+  </Card>
+</CardGroup>
+
+## Data Objects
+
+The Menu API returns these core objects:
+
+| Object | Description | Details |
+|--------|-------------|---------|
+| [Dish](/menu-api/data-objects/dish) | A menu item | Name, description, image, nutrition, allergens, diets |
+| [Nutrition](/menu-api/data-objects/nutrition) | Nutrition facts | Calories, macros, vitamins, minerals |
+| [Restaurant](/menu-api/data-objects/restaurant) | A location | Address, hours, coordinates, menus |
+| [Category](/menu-api/data-objects/category) | Menu grouping | Stir-Fry, Salads, Drinks, etc. |
+
+## Quick Example
+
+Fetch dishes with dietary filters:
+
+```graphql
+query GetFilteredDishes {
+  dishes(
+    menuKey: "your_menu_key",
+    filters: {
+      diets: [Vegan],
+      excludeAllergens: [Peanut, Dairy],
+      calorieRange: { max: 600 }
+    },
+    pagination: { first: 20 }
+  ) {
+    results {
+      dish {
+        id
+        name
+        calories
+        imageUrl
+        allergens { type, displayName }
+      }
+      matchStatus
+    }
+    counts {
+      matches
+      partialMatches
+      notAMatch
+    }
+  }
+}
+```
+
+## Workflow
+
+A typical integration follows this pattern:
+
+<Steps>
+  <Step title="Fetch Filter Options">
+    Get available diets, allergens, nutrients, and categories for your menu.
+
+    ```graphql
+    query { filterOptions(menuKey: "...") { ... } }
+    ```
+  </Step>
+  <Step title="Build Filter UI">
+    Create toggles, checkboxes, and sliders based on available options.
+  </Step>
+  <Step title="Query Dishes">
+    Fetch dishes with the diner's selected filters.
+
+    ```graphql
+    query { dishes(menuKey: "...", filters: {...}) { ... } }
+    ```
+  </Step>
+  <Step title="Display Results">
+    Show dishes with match status, nutrition, and allergen warnings.
+  </Step>
+  <Step title="Handle Customization">
+    For build-your-own dishes, use the Nutrition Calculator for real-time updates.
+  </Step>
+</Steps>
+
+## Authentication
+
+All Menu API requests require a Menu Key:
+
+```bash
+Authorization: Bearer your_menu_key
+```
+
+See [Authentication](/authentication) for details on key types and access levels.
+
+## Endpoints
+
+| Endpoint | Production | Sandbox |
+|----------|------------|---------|
+| GraphQL | `https://api.everybite.com/graphql` | `https://api.everybite-stage.com/graphql` |
+
+## Rate Limits
+
+| Key Type | Requests/min | Requests/day |
+|----------|--------------|--------------|
+| Restaurant | 60 | 10,000 |
+| Chain | 300 | 100,000 |
+| Brand | 1,000 | Unlimited |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Dish Object" icon="bowl-food" href="/menu-api/data-objects/dish">
+    Understand dish data structure
+  </Card>
+  <Card title="Search Function" icon="magnifying-glass" href="/menu-api/functions/search">
+    Implement keyword search
+  </Card>
+</CardGroup>

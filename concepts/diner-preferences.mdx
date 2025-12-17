@@ -1,0 +1,237 @@
+---
+title: Diner Preferences
+description: How personalization works in the EveryBite API
+---
+
+# Diner Preferences
+
+Diner Preferences represent an individual user's dietary needs, restrictions, and nutritional goals. Pass these with your queries to get personalized results and match status calculations.
+
+## The Two-Layer Model
+
+EveryBite uses a two-layer approach to personalization:
+
+<CardGroup cols={2}>
+  <Card title="Menu Key" icon="key">
+    **App-level, static**
+
+    Identifies which brand's menu data your app can access. Stored in your app configuration.
+  </Card>
+  <Card title="Diner Preferences" icon="user">
+    **User-level, dynamic**
+
+    The individual diner's dietary needs. Passed per-request or loaded from Passport.
+  </Card>
+</CardGroup>
+
+## Preference Types
+
+### Dietary Preferences (Diets)
+
+What type of diet does the diner follow?
+
+```graphql
+dinerPreferences: {
+  diets: [Vegan, GlutenFree]
+}
+```
+
+| Diet | Description |
+|------|-------------|
+| `Vegan` | No animal products |
+| `Vegetarian` | No meat, may include dairy/eggs |
+| `Pescatarian` | No meat except fish/seafood |
+| `GlutenFree` | No gluten-containing ingredients |
+| `DairyFree` | No dairy products |
+
+### Allergen Exclusions
+
+What allergens must be avoided?
+
+```graphql
+dinerPreferences: {
+  excludeAllergens: [Peanut, Dairy, Egg, Shellfish]
+}
+```
+
+| Allergen | Description |
+|----------|-------------|
+| `Dairy` | Milk and milk products |
+| `Egg` | Eggs and egg products |
+| `Fish` | Fish |
+| `Shellfish` | Shrimp, crab, lobster, etc. |
+| `Wheat` | Wheat and wheat products |
+| `TreeNut` | Almonds, walnuts, cashews, etc. |
+| `Peanut` | Peanuts and peanut products |
+| `Sesame` | Sesame seeds and sesame oil |
+| `Soy` | Soybeans and soy products |
+| `Gluten` | Gluten proteins |
+
+<Warning>
+Allergen exclusion is critical for diner safety. Our system flags allergens with a confidence score. Always display appropriate warnings and encourage diners to verify with restaurant staff.
+</Warning>
+
+### Nutrient Targets
+
+What nutritional goals does the diner have?
+
+```graphql
+dinerPreferences: {
+  calorieRange: { min: 300, max: 600 },
+  nutrientTargets: {
+    protein: { min: 20 },        # At least 20g protein
+    carbohydrates: { max: 50 },  # No more than 50g carbs
+    sodium: { max: 800 }         # Under 800mg sodium
+  }
+}
+```
+
+## Passing Preferences
+
+### Option 1: Per-Request (Anonymous)
+
+Pass preferences directly with each query. Good for anonymous users or simple implementations.
+
+```graphql
+query {
+  dishes(
+    menuKey: "your_menu_key",
+    dinerPreferences: {
+      diets: [Vegan],
+      excludeAllergens: [Peanut, Dairy],
+      calorieRange: { max: 600 }
+    }
+  ) {
+    results {
+      dish { name }
+      matchStatus
+    }
+  }
+}
+```
+
+### Option 2: From Passport (Authenticated)
+
+Load preferences from the diner's EveryBite Passport. Preferences are stored and applied automatically.
+
+```graphql
+query {
+  dishes(
+    menuKey: "your_menu_key",
+    passportToken: "diner_token_abc123"
+  ) {
+    results {
+      dish { name }
+      matchStatus  # Based on their saved Passport preferences
+    }
+  }
+}
+```
+
+<Info>
+With Passport, preferences are set once and work everywhere. A diner sets "I'm allergic to peanuts" in their Passport, and it's applied at every participating restaurant.
+</Info>
+
+### Option 3: Combined (Passport + Overrides)
+
+Start with Passport preferences but add request-specific filters.
+
+```graphql
+query {
+  dishes(
+    menuKey: "your_menu_key",
+    passportToken: "diner_token_abc123",
+    dinerPreferences: {
+      # These override/extend Passport preferences for this request
+      calorieRange: { max: 400 }  # Stricter than usual today
+    }
+  ) {
+    results {
+      dish { name }
+      matchStatus
+    }
+  }
+}
+```
+
+## How Preferences Affect Results
+
+When you pass preferences, two things happen:
+
+### 1. Filtering
+
+Dishes that don't meet criteria are filtered out or flagged:
+
+```graphql
+# With excludeAllergens: [Peanut]
+# Dishes containing peanuts are marked as NOT_A_MATCH
+```
+
+### 2. Match Status Calculation
+
+Every dish gets a `matchStatus` based on how well it fits the preferences:
+
+| Status | Meaning |
+|--------|---------|
+| `MATCH` | Fully compatible with all preferences |
+| `PARTIAL_MATCH` | Can be modified to become compatible |
+| `NOT_A_MATCH` | Contains excluded allergens or incompatible |
+
+See [Match Status](/concepts/match-status) for details.
+
+## Building a Preferences UI
+
+Use the `filterOptions` query to build your preferences UI dynamically:
+
+```graphql
+query {
+  filterOptions(menuKey: "your_key") {
+    diets {
+      type
+      displayName
+      isEnabled  # Is this filter available for this menu?
+    }
+    allergens {
+      type
+      displayName
+      icon       # Icon URL for UI
+      isEnabled
+    }
+    nutrients {
+      type
+      displayName
+      unit           # "g", "mg", "%DV"
+      defaultMin
+      defaultMax
+      recommendedMin # Suggested healthy range
+      recommendedMax
+    }
+  }
+}
+```
+
+### Example UI Pattern
+
+Based on our SmartMenu implementation:
+
+<Frame>
+![Preferences UI](/images/smartmenu-screenshots/02-preferences-dietary-allergens-nutrients.png)
+</Frame>
+
+Components:
+- **Diet toggles** - Buttons for Vegan, Vegetarian, etc.
+- **Allergen checkboxes** - Multi-select for allergens to exclude
+- **Nutrient sliders** - Range inputs for calories, protein, etc.
+- **Active filter chips** - Show selected filters with remove buttons
+
+## Preferences in Passport
+
+For a deeper integration, use EveryBite Passport to:
+
+- **Store preferences** - Diners set once, applies everywhere
+- **Sync across devices** - Preferences follow the diner
+- **Track history** - See how preferences evolve over time
+
+<Card title="Learn More About Passport" icon="passport" href="/passport/overview">
+  The universal dining identity
+</Card>

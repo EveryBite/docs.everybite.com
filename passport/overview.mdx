@@ -1,0 +1,213 @@
+---
+title: Passport Overview
+description: The universal dining identity
+sidebarTitle: Overview
+---
+
+# EveryBite Passport
+
+**One identity. Every restaurant. Your entire dining life.**
+
+EveryBite Passport is a universal dining identity that follows diners across all participating restaurants. Set preferences once, and they're applied everywhere.
+
+<Frame>
+![Passport Preferences](/images/passport-screenshots/02-preferences-dietary-allergens-nutrients.png)
+</Frame>
+
+## What Passport Provides
+
+<CardGroup cols={2}>
+  <Card title="Dietary Preferences" icon="sliders" href="/passport/preferences">
+    Diets, allergens, and nutrient targets - set once, applied everywhere
+  </Card>
+  <Card title="Saved Dishes" icon="heart" href="/passport/saved-dishes">
+    Favorite dishes from any restaurant, all in one place
+  </Card>
+  <Card title="Meal History" icon="clock-rotate-left" href="/passport/meal-history">
+    Every meal tracked with full nutrition data
+  </Card>
+  <Card title="Health Export" icon="heart-pulse" href="/passport/health-export">
+    Export dining data to Apple Health, Google Fit, and more
+  </Card>
+  <Card title="Meta-Loyalty" icon="award" href="/passport/loyalty">
+    All loyalty programs unified under one identity
+  </Card>
+</CardGroup>
+
+## The Passport Promise
+
+| Without Passport | With Passport |
+|-----------------|---------------|
+| Re-enter allergies at every restaurant | Set once, known everywhere |
+| Loyalty cards scattered across apps | All programs in one place |
+| No record of what you've eaten | Complete dining history |
+| Health apps don't know your diet | Auto-sync nutrition data |
+| Start fresh at every new restaurant | Recognized instantly |
+
+## How It Works
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                  EVERYBITE PASSPORT                      │
+│                    (Sid Conklin)                         │
+├─────────────────────────────────────────────────────────┤
+│                                                          │
+│  PREFERENCES                                             │
+│  • Vegan diet                                           │
+│  • Allergic to: Peanuts, Dairy                          │
+│  • Max 600 calories per meal                            │
+│                                                          │
+│  SAVED DISHES                                            │
+│  • Red Coconut Curry @ Honeygrow                        │
+│  • Large Poke Bowl @ Poke Stop                          │
+│  • Grilled Chicken @ Cracker Barrel                     │
+│                                                          │
+│  LOYALTY PROGRAMS                                        │
+│  • Honeygrow Rewards: 2,450 pts                         │
+│  • Starbucks: 125 stars                                 │
+│  • Chipotle Rewards: 890 pts                            │
+│                                                          │
+│  MEAL HISTORY                                            │
+│  • Dec 16: Stir-Fry @ Honeygrow (530 cal)              │
+│  • Dec 15: Salad @ sweetgreen (420 cal)                │
+│  • Dec 14: Poke Bowl @ Poke Stop (680 cal)             │
+│                                                          │
+└─────────────────────────────────────────────────────────┘
+```
+
+## Integration Options
+
+### Option 1: Passport-Aware Menu API
+
+The simplest integration - pass a Passport token to the Menu API:
+
+```graphql
+query {
+  dishes(
+    menuKey: "your_key",
+    passportToken: "user_passport_token"
+  ) {
+    results {
+      dish { name }
+      matchStatus  # Based on Passport preferences
+    }
+  }
+}
+```
+
+### Option 2: Full Passport Integration
+
+Access all Passport features:
+
+```graphql
+# Get user's complete Passport
+query {
+  passport(token: "user_passport_token") {
+    profile { name, email }
+    preferences { diets, allergens, nutrients }
+    savedDishes { dish { name }, restaurant { name } }
+    mealHistory { date, dish { name }, nutrition { calories } }
+    loyaltyPrograms { program { name }, points }
+  }
+}
+```
+
+## Authentication
+
+Passport uses OAuth 2.0 for user authentication:
+
+<Steps>
+  <Step title="Redirect to EveryBite">
+    ```
+    https://auth.everybite.com/authorize?
+      client_id=YOUR_CLIENT_ID&
+      redirect_uri=YOUR_CALLBACK&
+      scope=passport.read
+    ```
+  </Step>
+  <Step title="User Authenticates">
+    User signs in or creates an EveryBite account
+  </Step>
+  <Step title="Receive Token">
+    ```json
+    {
+      "access_token": "passport_abc123...",
+      "token_type": "Bearer",
+      "expires_in": 3600
+    }
+    ```
+  </Step>
+  <Step title="Use Token">
+    Include in API requests:
+    ```
+    Authorization: Bearer passport_abc123...
+    ```
+  </Step>
+</Steps>
+
+## Scopes
+
+Request only the access you need:
+
+| Scope | Access |
+|-------|--------|
+| `passport.read` | Read preferences, saved dishes |
+| `passport.write` | Update preferences, save dishes |
+| `passport.history` | Read meal history |
+| `passport.loyalty` | Access loyalty programs |
+| `passport.health` | Export to health apps |
+
+## Quick Start
+
+```graphql
+# 1. Get user's preferences
+query GetPreferences($token: String!) {
+  passport(token: $token) {
+    preferences {
+      diets { type }
+      allergens { type }
+      calorieMax
+    }
+  }
+}
+
+# 2. Use with Menu API
+query GetMatchingDishes($menuKey: String!, $token: String!) {
+  dishes(
+    menuKey: $menuKey,
+    passportToken: $token
+  ) {
+    results {
+      dish { name, calories }
+      matchStatus
+    }
+  }
+}
+```
+
+## Privacy & Data
+
+<AccordionGroup>
+  <Accordion title="User controls their data">
+    Users can view, export, and delete all their Passport data at any time.
+  </Accordion>
+
+  <Accordion title="Origin tracking">
+    Passport tracks which app/restaurant created the profile and where it's been used. This data is available to the user and used for analytics.
+  </Accordion>
+
+  <Accordion title="Developer access">
+    Developers only see data the user has authorized. Meal history from other restaurants is not shared unless explicitly authorized.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Preferences" icon="sliders" href="/passport/preferences">
+    Implement preference management
+  </Card>
+  <Card title="Saved Dishes" icon="heart" href="/passport/saved-dishes">
+    Add favorites functionality
+  </Card>
+</CardGroup>

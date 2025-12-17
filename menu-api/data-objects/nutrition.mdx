@@ -1,0 +1,273 @@
+---
+title: Nutrition
+description: Complete nutrition facts for dishes
+---
+
+# Nutrition
+
+The **Nutrition** object contains complete nutrition facts for a dish, following FDA nutrition label standards.
+
+## Schema
+
+```graphql
+type Nutrition {
+  # Energy
+  calories: Int
+  caloriesFromFat: Int
+
+  # Fats
+  fatTotal: Float        # grams
+  fatSaturated: Float    # grams
+  fatTrans: Float        # grams
+
+  # Other
+  cholesterol: Float     # milligrams
+  sodium: Float          # milligrams
+
+  # Carbohydrates
+  carbohydrates: Float   # grams
+  dietaryFiber: Float    # grams
+  sugar: Float           # grams
+
+  # Protein
+  protein: Float         # grams
+
+  # Vitamins & Minerals (% Daily Value)
+  vitaminA: Float
+  vitaminC: Float
+  calcium: Float
+  iron: Float
+
+  # Serving
+  servingSize: String        # e.g., "1 bowl (425g)"
+  servingSizeGrams: Float    # grams
+}
+```
+
+## Fields
+
+### Energy
+
+| Field | Type | Unit | Description |
+|-------|------|------|-------------|
+| `calories` | Int | kcal | Total calories |
+| `caloriesFromFat` | Int | kcal | Calories from fat |
+
+### Fats
+
+| Field | Type | Unit | Description |
+|-------|------|------|-------------|
+| `fatTotal` | Float | g | Total fat |
+| `fatSaturated` | Float | g | Saturated fat |
+| `fatTrans` | Float | g | Trans fat |
+
+### Other
+
+| Field | Type | Unit | Description |
+|-------|------|------|-------------|
+| `cholesterol` | Float | mg | Cholesterol |
+| `sodium` | Float | mg | Sodium |
+
+### Carbohydrates
+
+| Field | Type | Unit | Description |
+|-------|------|------|-------------|
+| `carbohydrates` | Float | g | Total carbohydrates |
+| `dietaryFiber` | Float | g | Dietary fiber |
+| `sugar` | Float | g | Total sugars |
+
+### Protein
+
+| Field | Type | Unit | Description |
+|-------|------|------|-------------|
+| `protein` | Float | g | Protein |
+
+### Vitamins & Minerals
+
+| Field | Type | Unit | Description |
+|-------|------|------|-------------|
+| `vitaminA` | Float | %DV | Vitamin A (% Daily Value) |
+| `vitaminC` | Float | %DV | Vitamin C (% Daily Value) |
+| `calcium` | Float | %DV | Calcium (% Daily Value) |
+| `iron` | Float | %DV | Iron (% Daily Value) |
+
+<Info>
+Vitamin and mineral values are expressed as percentage of Daily Value (%DV) based on a 2,000 calorie diet.
+</Info>
+
+## Example Query
+
+```graphql
+query GetDishNutrition($id: ID!) {
+  dish(menuKey: "your_key", id: $id) {
+    name
+    nutrition {
+      calories
+      caloriesFromFat
+      fatTotal
+      fatSaturated
+      fatTrans
+      cholesterol
+      sodium
+      carbohydrates
+      dietaryFiber
+      sugar
+      protein
+      vitaminA
+      vitaminC
+      calcium
+      iron
+      servingSize
+    }
+  }
+}
+```
+
+## Example Response
+
+```json
+{
+  "data": {
+    "dish": {
+      "name": "Pomegranate Acai Salad",
+      "nutrition": {
+        "calories": 400,
+        "caloriesFromFat": 180,
+        "fatTotal": 20,
+        "fatSaturated": 4,
+        "fatTrans": 0,
+        "cholesterol": 15,
+        "sodium": 520,
+        "carbohydrates": 45,
+        "dietaryFiber": 8,
+        "sugar": 22,
+        "protein": 12,
+        "vitaminA": 45,
+        "vitaminC": 60,
+        "calcium": 15,
+        "iron": 10,
+        "servingSize": "1 salad (380g)"
+      }
+    }
+  }
+}
+```
+
+## Displaying Nutrition
+
+### Compact View (Card)
+
+Show key macros on dish cards:
+
+```jsx
+<div className="nutrition-compact">
+  <span>{nutrition.calories} cal</span>
+  <span>{nutrition.protein}g protein</span>
+  <span>{nutrition.carbohydrates}g carbs</span>
+</div>
+```
+
+### Full Nutrition Label
+
+<Frame>
+![Nutrition Panel](/images/smartmenu-screenshots/04-dish-details-modal-nutrition.png)
+</Frame>
+
+For detailed view, display FDA-style nutrition facts:
+
+```jsx
+<div className="nutrition-label">
+  <h3>Nutrition Facts</h3>
+  <p className="serving">Serving Size: {nutrition.servingSize}</p>
+
+  <div className="calories">
+    <strong>{nutrition.calories}</strong> Calories
+  </div>
+
+  <table>
+    <tr><td>Total Fat</td><td>{nutrition.fatTotal}g</td></tr>
+    <tr className="indent"><td>Saturated Fat</td><td>{nutrition.fatSaturated}g</td></tr>
+    <tr className="indent"><td>Trans Fat</td><td>{nutrition.fatTrans}g</td></tr>
+    <tr><td>Cholesterol</td><td>{nutrition.cholesterol}mg</td></tr>
+    <tr><td>Sodium</td><td>{nutrition.sodium}mg</td></tr>
+    <tr><td>Total Carbohydrate</td><td>{nutrition.carbohydrates}g</td></tr>
+    <tr className="indent"><td>Dietary Fiber</td><td>{nutrition.dietaryFiber}g</td></tr>
+    <tr className="indent"><td>Sugars</td><td>{nutrition.sugar}g</td></tr>
+    <tr><td>Protein</td><td>{nutrition.protein}g</td></tr>
+  </table>
+</div>
+```
+
+## Filtering by Nutrients
+
+Use nutrient ranges in your filter criteria:
+
+```graphql
+query {
+  dishes(
+    menuKey: "your_key",
+    filters: {
+      calorieRange: { min: 300, max: 600 },
+      nutrientTargets: {
+        protein: { min: 20 },          # At least 20g protein
+        carbohydrates: { max: 50 },    # Under 50g carbs
+        sodium: { max: 800 }           # Under 800mg sodium
+      }
+    }
+  ) {
+    results {
+      dish { name }
+      nutrition { calories, protein, carbohydrates, sodium }
+    }
+  }
+}
+```
+
+## Dynamic Nutrition (Customizable Dishes)
+
+For build-your-own dishes, nutrition updates as selections are made:
+
+```graphql
+query CalculateNutrition(
+  $dishId: ID!,
+  $selections: [SelectionInput!]!
+) {
+  calculateNutrition(
+    menuKey: "your_key",
+    dishId: $dishId,
+    selections: $selections
+  ) {
+    nutrition {
+      calories
+      protein
+      carbohydrates
+      fatTotal
+    }
+  }
+}
+```
+
+<Frame>
+![Dynamic Nutrition](/images/smartmenu-screenshots/06-dish-customization-nutrition-update.png)
+</Frame>
+
+See [Nutrition Calculator](/menu-api/functions/nutrition-calculator) for details.
+
+## Calorie Disclaimer
+
+Always display the FDA calorie disclaimer:
+
+```
+2,000 calories a day is used for general nutrition advice, but calorie needs vary.
+```
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Dish" icon="bowl-food" href="/menu-api/data-objects/dish">
+    Parent dish object
+  </Card>
+  <Card title="Nutrition Calculator" icon="calculator" href="/menu-api/functions/nutrition-calculator">
+    Dynamic nutrition for customizable dishes
+  </Card>
+</CardGroup>

@@ -1,0 +1,298 @@
+---
+title: Preferences
+description: Dietary preferences that follow the diner everywhere
+---
+
+# Preferences
+
+Passport Preferences store a diner's dietary needs, allergen restrictions, and nutritional goals. Once set, they're applied at every participating restaurant.
+
+<Frame>
+![Preferences UI](/images/passport-screenshots/02-preferences-dietary-allergens-nutrients.png)
+</Frame>
+
+## Reading Preferences
+
+```graphql
+query GetPreferences($token: String!) {
+  passport(token: $token) {
+    preferences {
+      diets {
+        type
+        displayName
+      }
+      allergens {
+        type
+        displayName
+      }
+      nutrients {
+        type
+        min
+        max
+      }
+    }
+  }
+}
+```
+
+### Example Response
+
+```json
+{
+  "data": {
+    "passport": {
+      "preferences": {
+        "diets": [
+          { "type": "Vegan", "displayName": "Vegan" }
+        ],
+        "allergens": [
+          { "type": "Peanut", "displayName": "Peanut" },
+          { "type": "Dairy", "displayName": "Dairy" }
+        ],
+        "nutrients": [
+          { "type": "Calories", "min": null, "max": 600 },
+          { "type": "Protein", "min": 20, "max": null }
+        ]
+      }
+    }
+  }
+}
+```
+
+## Updating Preferences
+
+```graphql
+mutation UpdatePreferences($token: String!, $input: PreferencesInput!) {
+  updatePassportPreferences(token: $token, input: $input) {
+    preferences {
+      diets { type }
+      allergens { type }
+      nutrients { type, min, max }
+    }
+  }
+}
+```
+
+### Input Types
+
+```graphql
+input PreferencesInput {
+  diets: [DietType!]
+  allergens: [AllergenType!]
+  nutrients: [NutrientTargetInput!]
+}
+
+input NutrientTargetInput {
+  type: NutrientType!
+  min: Float
+  max: Float
+}
+```
+
+### Example: Set Vegan with Peanut Allergy
+
+```graphql
+mutation {
+  updatePassportPreferences(
+    token: "user_token",
+    input: {
+      diets: [Vegan],
+      allergens: [Peanut],
+      nutrients: [
+        { type: Calories, max: 600 },
+        { type: Protein, min: 20 }
+      ]
+    }
+  ) {
+    preferences {
+      diets { type }
+    }
+  }
+}
+```
+
+## Using with Menu API
+
+Pass the Passport token to automatically apply preferences:
+
+```graphql
+query {
+  dishes(
+    menuKey: "restaurant_key",
+    passportToken: "user_passport_token"
+  ) {
+    results {
+      dish { name }
+      matchStatus  # Calculated from Passport preferences
+    }
+  }
+}
+```
+
+This is equivalent to manually passing `dinerPreferences`:
+
+```graphql
+# Without Passport - must pass preferences manually
+dishes(
+  menuKey: "...",
+  dinerPreferences: {
+    diets: [Vegan],
+    excludeAllergens: [Peanut],
+    calorieRange: { max: 600 }
+  }
+)
+
+# With Passport - preferences loaded automatically
+dishes(
+  menuKey: "...",
+  passportToken: "user_token"
+)
+```
+
+## Preference Types
+
+### Diets
+
+| Type | Description |
+|------|-------------|
+| `Vegan` | No animal products |
+| `Vegetarian` | No meat, may include dairy/eggs |
+| `Pescatarian` | No meat except fish/seafood |
+| `GlutenFree` | No gluten-containing ingredients |
+| `DairyFree` | No dairy products |
+
+### Allergens
+
+| Type | Description |
+|------|-------------|
+| `Dairy` | Milk and milk products |
+| `Egg` | Eggs and egg products |
+| `Fish` | Fish |
+| `Shellfish` | Shrimp, crab, lobster, etc. |
+| `Wheat` | Wheat and wheat products |
+| `TreeNut` | Almonds, walnuts, cashews, etc. |
+| `Peanut` | Peanuts and peanut products |
+| `Sesame` | Sesame seeds and sesame oil |
+| `Soy` | Soybeans and soy products |
+| `Gluten` | Gluten proteins |
+
+### Nutrients
+
+| Type | Unit | Description |
+|------|------|-------------|
+| `Calories` | kcal | Total calories |
+| `Protein` | g | Protein |
+| `Carbohydrates` | g | Total carbs |
+| `Fat` | g | Total fat |
+| `Sodium` | mg | Sodium |
+| `Fiber` | g | Dietary fiber |
+| `Sugar` | g | Total sugars |
+
+## Building a Preferences UI
+
+```jsx
+function PreferencesEditor({ token }) {
+  const { data } = useQuery(GET_PREFERENCES, { variables: { token } });
+  const [updatePreferences] = useMutation(UPDATE_PREFERENCES);
+
+  const [diets, setDiets] = useState([]);
+  const [allergens, setAllergens] = useState([]);
+  const [calorieMax, setCalorieMax] = useState(null);
+
+  useEffect(() => {
+    if (data?.passport?.preferences) {
+      setDiets(data.passport.preferences.diets.map(d => d.type));
+      setAllergens(data.passport.preferences.allergens.map(a => a.type));
+      // ...
+    }
+  }, [data]);
+
+  const handleSave = async () => {
+    await updatePreferences({
+      variables: {
+        token,
+        input: {
+          diets,
+          allergens,
+          nutrients: [
+            { type: 'Calories', max: calorieMax }
+          ]
+        }
+      }
+    });
+  };
+
+  return (
+    <div>
+      <section>
+        <h3>My Dietary Preferences</h3>
+        <p>These preferences are applied every time I open an EveryBite menu.</p>
+
+        <div className="diets">
+          <h4>Diets</h4>
+          {['Vegan', 'Vegetarian', 'Pescatarian'].map(diet => (
+            <Checkbox
+              key={diet}
+              label={diet}
+              checked={diets.includes(diet)}
+              onChange={() => toggleDiet(diet)}
+            />
+          ))}
+        </div>
+
+        <div className="allergens">
+          <h4>Allergens</h4>
+          {ALLERGEN_TYPES.map(allergen => (
+            <Checkbox
+              key={allergen}
+              label={allergen}
+              checked={allergens.includes(allergen)}
+              onChange={() => toggleAllergen(allergen)}
+            />
+          ))}
+        </div>
+
+        <div className="nutrients">
+          <h4>Nutrients</h4>
+          <RangeSlider
+            label="Calories"
+            max={2500}
+            value={calorieMax}
+            onChange={setCalorieMax}
+          />
+        </div>
+
+        <button onClick={handleSave}>Save Preferences</button>
+      </section>
+    </div>
+  );
+}
+```
+
+## Cross-Restaurant Application
+
+The key value of Passport preferences:
+
+1. **Diner sets preferences** in your app (or any EveryBite app)
+2. **Preferences sync** to their Passport profile
+3. **Any participating restaurant** can access these preferences
+4. **Match status calculated** consistently everywhere
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Your App  │     │  Passport   │     │ Other Apps  │
+│             │────▶│             │◀────│             │
+│ Set prefs   │     │ Stores data │     │ Read prefs  │
+└─────────────┘     └─────────────┘     └─────────────┘
+```
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Diner Preferences Concept" icon="sliders" href="/concepts/diner-preferences">
+    How preferences work in the API
+  </Card>
+  <Card title="Match Status" icon="circle-check" href="/concepts/match-status">
+    How preferences affect matching
+  </Card>
+</CardGroup>

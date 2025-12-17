@@ -1,0 +1,226 @@
+---
+title: Match Status Function
+description: Query and filter by match status
+---
+
+# Match Status Function
+
+The Match Status function calculates how well dishes fit a diner's preferences and lets you filter results by match status.
+
+<Info>
+For a conceptual overview of Match, Partial Match, and Not a Match, see [Match Status Concepts](/concepts/match-status).
+</Info>
+
+## Querying with Match Status
+
+When you include `dinerPreferences`, every dish gets a `matchStatus`:
+
+```graphql
+query GetDishesWithMatchStatus {
+  dishes(
+    menuKey: "your_key",
+    dinerPreferences: {
+      diets: [Vegan],
+      excludeAllergens: [Dairy, Egg]
+    }
+  ) {
+    results {
+      dish {
+        id
+        name
+      }
+      matchStatus        # MATCH, PARTIAL_MATCH, NOT_A_MATCH, UNKNOWN
+      matchDetails {
+        dietCompatibility
+        allergenConflicts
+        nutrientsInRange
+        modificationHints {
+          action
+          ingredient
+          reason
+          resultingStatus
+        }
+      }
+    }
+    counts {
+      matches
+      partialMatches
+      notAMatch
+    }
+  }
+}
+```
+
+## Filtering by Match Status
+
+Only return dishes with specific match statuses:
+
+```graphql
+# Only full matches
+query MatchesOnly {
+  dishes(
+    menuKey: "your_key",
+    dinerPreferences: { ... },
+    filters: {
+      matchStatus: [MATCH]
+    }
+  ) { ... }
+}
+
+# Matches and partial matches (exclude Not a Match)
+query MatchesAndPartial {
+  dishes(
+    menuKey: "your_key",
+    dinerPreferences: { ... },
+    filters: {
+      matchStatus: [MATCH, PARTIAL_MATCH]
+    }
+  ) { ... }
+}
+```
+
+## Match Details
+
+The `matchDetails` object explains why a dish has its status:
+
+```graphql
+type MatchDetails {
+  # Which diets the dish is compatible with
+  dietCompatibility: [DietType!]!
+
+  # Which excluded allergens are present
+  allergenConflicts: [AllergenType!]!
+
+  # Whether nutrients are within target ranges
+  nutrientsInRange: Boolean!
+
+  # For partial matches: what to change
+  modificationHints: [ModificationHint!]
+}
+
+type ModificationHint {
+  action: ModificationAction!  # REMOVE, SUBSTITUTE
+  ingredient: String!          # "Feta Cheese"
+  reason: String!              # "Contains Dairy"
+  resultingStatus: MatchStatus! # MATCH (if this change is made)
+}
+```
+
+## Modification Hints
+
+For `PARTIAL_MATCH` dishes, `modificationHints` tells you exactly what would make it a full `MATCH`:
+
+```json
+{
+  "matchStatus": "PARTIAL_MATCH",
+  "matchDetails": {
+    "allergenConflicts": ["Dairy"],
+    "modificationHints": [
+      {
+        "action": "REMOVE",
+        "ingredient": "Feta Cheese",
+        "reason": "Contains Dairy",
+        "resultingStatus": "MATCH"
+      }
+    ]
+  }
+}
+```
+
+### Displaying Hints
+
+```jsx
+{matchStatus === 'PARTIAL_MATCH' && modificationHints.length > 0 && (
+  <div className="modification-hints">
+    <p>Make this dish work for you:</p>
+    {modificationHints.map((hint, i) => (
+      <button key={i} onClick={() => applyModification(hint)}>
+        {hint.action === 'REMOVE' ? 'Remove' : 'Substitute'} {hint.ingredient}
+      </button>
+    ))}
+  </div>
+)}
+```
+
+## Match Counts
+
+Every dish query returns aggregate counts:
+
+```graphql
+counts {
+  total          # All dishes
+  matches        # Full matches
+  partialMatches # Can be modified to match
+  notAMatch      # Incompatible
+}
+```
+
+Use this for the match summary bar:
+
+```jsx
+<div className="match-summary">
+  <span className="match">{counts.matches} Match</span>
+  <span className="partial">{counts.partialMatches} Partial Match</span>
+  <span className="no-match">{counts.notAMatch} Not a Match</span>
+</div>
+```
+
+## Quick Count Query
+
+If you just need counts (not full dish data), use the count query:
+
+```graphql
+query QuickCounts {
+  dishCounts(
+    menuKey: "your_key",
+    dinerPreferences: {
+      diets: [Vegan],
+      excludeAllergens: [Dairy]
+    },
+    filters: {
+      category: "cat_stirfry"
+    }
+  ) {
+    matches
+    partialMatches
+    notAMatch
+  }
+}
+```
+
+This is faster for updating counts as filters change.
+
+## Single Dish Match Check
+
+Check match status for a specific dish:
+
+```graphql
+query CheckDishMatch($dishId: ID!) {
+  dish(menuKey: "your_key", id: $dishId) {
+    name
+    matchStatus(dinerPreferences: {
+      diets: [Vegan],
+      excludeAllergens: [Dairy]
+    })
+    matchDetails(dinerPreferences: {
+      diets: [Vegan],
+      excludeAllergens: [Dairy]
+    }) {
+      dietCompatibility
+      allergenConflicts
+      modificationHints { ... }
+    }
+  }
+}
+```
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Match Status Concepts" icon="circle-check" href="/concepts/match-status">
+    Detailed explanation of match types
+  </Card>
+  <Card title="Filter Function" icon="filter" href="/menu-api/functions/filter">
+    Combine with other filters
+  </Card>
+</CardGroup>

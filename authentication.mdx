@@ -1,0 +1,154 @@
+---
+title: Authentication
+description: Understanding Menu Keys and access levels
+---
+
+# Authentication
+
+All EveryBite API requests require authentication using a Menu Key. This page explains how keys work and what access levels are available.
+
+## Menu Keys
+
+A **Menu Key** identifies which restaurant brand's menu data your application can access. Think of it as your API credential scoped to specific menu data.
+
+```bash
+# Include your Menu Key in the Authorization header
+Authorization: Bearer hg_live_abc123def456...
+```
+
+## Key Types and Access Levels
+
+Menu Keys are issued at different levels of the restaurant hierarchy, depending on your relationship with the brand.
+
+<Tabs>
+  <Tab title="Restaurant Key">
+    **For:** Single-location restaurants or franchisees
+
+    **Access:** One restaurant location and its menus
+
+    ```
+    Restaurant Key
+    └── Single Location
+        └── All menus at that location
+    ```
+  </Tab>
+  <Tab title="Chain Key">
+    **For:** Restaurant chains with multiple locations
+
+    **Access:** All restaurants in the chain and their menus
+
+    ```
+    Chain Key
+    └── All Locations (e.g., 50 Honeygrow locations)
+        └── All menus (may include regional variations)
+    ```
+  </Tab>
+  <Tab title="Brand Key">
+    **For:** Parent companies with multiple chains
+
+    **Access:** All chains, all restaurants, all menus
+
+    ```
+    Brand Key
+    └── Chain A (e.g., Taco Bell)
+    │   └── All Taco Bell locations
+    └── Chain B (e.g., KFC)
+    │   └── All KFC locations
+    └── Chain C (e.g., Pizza Hut)
+        └── All Pizza Hut locations
+    ```
+  </Tab>
+</Tabs>
+
+## Getting Your Key
+
+1. **Sign up** at [developer.everybite.com](https://developer.everybite.com)
+2. **Request access** to a specific brand's menu data
+3. **Receive approval** from the brand administrator
+4. **Get your Menu Key** in your developer dashboard
+
+<Warning>
+Keep your Menu Key secure. Do not expose it in client-side code or public repositories. Use environment variables and server-side requests.
+</Warning>
+
+## Environments
+
+Each Menu Key has separate credentials for sandbox and production:
+
+| Environment | Base URL | Purpose |
+|-------------|----------|---------|
+| Sandbox | `https://api.everybite-stage.com/graphql` | Testing and development |
+| Production | `https://api.everybite.com/graphql` | Live data |
+
+<Info>
+Sandbox keys have the prefix `_sandbox` and access test data that mirrors production structure.
+</Info>
+
+## Diner Preferences (Per-Request)
+
+In addition to your Menu Key, you can pass **Diner Preferences** with each request to personalize results:
+
+```graphql
+query {
+  dishes(
+    menuKey: "your_menu_key",
+    dinerPreferences: {
+      diets: [Vegan, GlutenFree],
+      excludeAllergens: [Peanut, Dairy],
+      calorieRange: { min: 200, max: 600 }
+    }
+  ) {
+    results {
+      dish { name }
+      matchStatus  # Calculated based on dinerPreferences
+    }
+  }
+}
+```
+
+Diner Preferences are not stored - they're applied per-request. For persistent preferences, use [EveryBite Passport](/passport/overview).
+
+## Passport Tokens
+
+If integrating with EveryBite Passport, you'll also work with **Passport Tokens** for authenticated diners:
+
+```graphql
+query {
+  dishes(
+    menuKey: "your_menu_key",
+    passportToken: "diner_passport_token"  # Loads their saved preferences
+  ) {
+    results {
+      dish { name }
+      matchStatus  # Based on their Passport preferences
+    }
+  }
+}
+```
+
+See [Passport Authentication](/passport/overview#authentication) for details.
+
+## Rate Limits
+
+| Key Type | Requests/minute | Requests/day |
+|----------|-----------------|--------------|
+| Restaurant | 60 | 10,000 |
+| Chain | 300 | 100,000 |
+| Brand | 1,000 | Unlimited |
+
+Rate limit headers are included in every response:
+
+```
+X-RateLimit-Limit: 300
+X-RateLimit-Remaining: 297
+X-RateLimit-Reset: 1703001600
+```
+
+## Error Codes
+
+| Code | Meaning | Solution |
+|------|---------|----------|
+| `INVALID_MENU_KEY` | Key is malformed or expired | Check your key, request a new one if expired |
+| `UNAUTHORIZED_BRAND` | Key doesn't have access to requested brand | Request access to the brand |
+| `RATE_LIMITED` | Too many requests | Slow down, implement backoff |
+| `KEY_REVOKED` | Key has been revoked | Contact support |

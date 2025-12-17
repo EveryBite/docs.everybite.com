@@ -1,0 +1,249 @@
+---
+title: Saved Dishes
+description: Favorite dishes from any restaurant
+---
+
+# Saved Dishes
+
+Saved Dishes lets diners favorite meals from any participating restaurant. Unlike restaurant-specific favorites, Passport saved dishes span the entire EveryBite ecosystem.
+
+<Frame>
+![Saved Dishes](/images/passport-screenshots/03-saved-dishes-multi-restaurant.png)
+</Frame>
+
+## Reading Saved Dishes
+
+```graphql
+query GetSavedDishes($token: String!) {
+  passport(token: $token) {
+    savedDishes {
+      id
+      savedAt
+      dish {
+        id
+        name
+        calories
+        imageUrl
+      }
+      restaurant {
+        id
+        name
+        chain { name }
+      }
+    }
+  }
+}
+```
+
+### Example Response
+
+```json
+{
+  "data": {
+    "passport": {
+      "savedDishes": [
+        {
+          "id": "saved_1",
+          "savedAt": "2025-12-15T14:30:00Z",
+          "dish": {
+            "id": "dish_abc",
+            "name": "Grilled Chicken Tenders",
+            "calories": 160,
+            "imageUrl": "https://..."
+          },
+          "restaurant": {
+            "id": "rest_123",
+            "name": "Cracker Barrel Old Country Store",
+            "chain": { "name": "Cracker Barrel" }
+          }
+        },
+        {
+          "id": "saved_2",
+          "savedAt": "2025-12-14T12:00:00Z",
+          "dish": {
+            "id": "dish_def",
+            "name": "Large Poke Bowl",
+            "calories": null,
+            "imageUrl": "https://..."
+          },
+          "restaurant": {
+            "id": "rest_456",
+            "name": "Poke Stop",
+            "chain": { "name": "Poke Stop" }
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+## Saving a Dish
+
+```graphql
+mutation SaveDish($token: String!, $dishId: ID!) {
+  saveDish(token: $token, dishId: $dishId) {
+    savedDish {
+      id
+      savedAt
+      dish { name }
+    }
+  }
+}
+```
+
+## Removing a Saved Dish
+
+```graphql
+mutation UnsaveDish($token: String!, $savedDishId: ID!) {
+  unsaveDish(token: $token, savedDishId: $savedDishId) {
+    success
+  }
+}
+```
+
+## Checking if Dish is Saved
+
+Include save status in dish queries:
+
+```graphql
+query GetDishes($menuKey: String!, $passportToken: String) {
+  dishes(menuKey: $menuKey, passportToken: $passportToken) {
+    results {
+      dish {
+        id
+        name
+        isSaved  # true if in user's saved dishes
+      }
+    }
+  }
+}
+```
+
+## UI Pattern
+
+### Save Button on Dish Card
+
+```jsx
+function DishCard({ dish, passportToken }) {
+  const [isSaved, setIsSaved] = useState(dish.isSaved);
+  const [saveDish] = useMutation(SAVE_DISH);
+  const [unsaveDish] = useMutation(UNSAVE_DISH);
+
+  const toggleSave = async () => {
+    if (isSaved) {
+      await unsaveDish({ variables: { token: passportToken, savedDishId: dish.savedId } });
+      setIsSaved(false);
+    } else {
+      await saveDish({ variables: { token: passportToken, dishId: dish.id } });
+      setIsSaved(true);
+    }
+  };
+
+  return (
+    <div className="dish-card">
+      <img src={dish.imageUrl} alt={dish.name} />
+      <button
+        className={`save-button ${isSaved ? 'saved' : ''}`}
+        onClick={toggleSave}
+      >
+        <HeartIcon filled={isSaved} />
+      </button>
+      <h3>{dish.name}</h3>
+      <span>{dish.calories} Calories</span>
+    </div>
+  );
+}
+```
+
+### Saved Dishes Page
+
+```jsx
+function SavedDishesPage({ passportToken }) {
+  const { data, loading } = useQuery(GET_SAVED_DISHES, {
+    variables: { token: passportToken }
+  });
+
+  if (loading) return <Loading />;
+
+  const savedDishes = data?.passport?.savedDishes || [];
+
+  // Group by restaurant
+  const byRestaurant = savedDishes.reduce((acc, saved) => {
+    const key = saved.restaurant.name;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(saved);
+    return acc;
+  }, {});
+
+  return (
+    <div className="saved-dishes">
+      <h1>Saved Dishes</h1>
+
+      {Object.entries(byRestaurant).map(([restaurant, dishes]) => (
+        <section key={restaurant}>
+          <h2>{restaurant}</h2>
+          <div className="dishes-grid">
+            {dishes.map(({ dish, id }) => (
+              <SavedDishCard
+                key={id}
+                dish={dish}
+                savedId={id}
+                onRemove={() => handleRemove(id)}
+              />
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+```
+
+## Cross-Restaurant Value
+
+Saved Dishes showcases the Passport value proposition:
+
+| Traditional | With Passport |
+|-------------|---------------|
+| Favorites locked to one app | Favorites from any restaurant |
+| Can't remember what you liked | All favorites in one place |
+| Different login per restaurant | One identity everywhere |
+
+## Quick Reorder
+
+From saved dishes, enable quick reordering:
+
+```graphql
+mutation QuickReorder(
+  $token: String!,
+  $savedDishId: ID!,
+  $restaurantId: ID!
+) {
+  quickReorder(
+    token: $token,
+    savedDishId: $savedDishId,
+    restaurantId: $restaurantId
+  ) {
+    order {
+      id
+      items { dish { name } }
+    }
+  }
+}
+```
+
+<Info>
+Quick reorder requires the Ordering API integration. The dish must be available at the selected restaurant.
+</Info>
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Meal History" icon="clock-rotate-left" href="/passport/meal-history">
+    Track what you've eaten
+  </Card>
+  <Card title="Passport Overview" icon="passport" href="/passport/overview">
+    The universal dining identity
+  </Card>
+</CardGroup>

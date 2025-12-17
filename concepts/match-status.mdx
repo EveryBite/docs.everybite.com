@@ -1,0 +1,299 @@
+---
+title: Match Status
+description: Understanding Match, Partial Match, and Not a Match
+---
+
+# Match Status
+
+When you query dishes with Diner Preferences, every dish receives a **Match Status** indicating how well it fits the diner's needs. This is a core feature that powers personalized menu experiences.
+
+## The Three Statuses
+
+<CardGroup cols={3}>
+  <Card title="Match" icon="circle-check" color="#22C55E">
+    Dish is fully compatible with all preferences as-is.
+
+    **UI:** Green indicator, show prominently
+  </Card>
+  <Card title="Partial Match" icon="circle-half-stroke" color="#F59E0B">
+    Dish can be modified to become compatible.
+
+    **UI:** Orange indicator, show with guidance
+  </Card>
+  <Card title="Not a Match" icon="circle-xmark" color="#EF4444">
+    Dish contains excluded allergens or is incompatible.
+
+    **UI:** Red indicator or hidden, clear warning
+  </Card>
+</CardGroup>
+
+## Match Status in Action
+
+<Frame>
+![Match Status UI](/images/smartmenu-screenshots/02-search-results-partial-match.png)
+</Frame>
+
+The SmartMenu shows match counts that update as filters change:
+
+```
+36 Match | 17 Partial Match | 24 Not a Match
+```
+
+## Understanding Each Status
+
+### Match (Green)
+
+The dish satisfies **all** of the diner's preferences:
+
+- Compatible with all selected diets (Vegan, GlutenFree, etc.)
+- Contains none of the excluded allergens
+- Falls within nutrient ranges (calories, protein, etc.)
+
+```graphql
+{
+  "dish": { "name": "Red Coconut Curry" },
+  "matchStatus": "MATCH",
+  "matchDetails": {
+    "dietCompatibility": ["Vegan", "GlutenFree"],
+    "allergenConflicts": [],
+    "nutrientsInRange": true
+  }
+}
+```
+
+### Partial Match (Orange)
+
+The dish **can be modified** to meet the diner's preferences. This typically means:
+
+- It's a customizable dish (build-your-own)
+- Certain ingredients can be removed or swapped
+- With the right modifications, it becomes a full Match
+
+```graphql
+{
+  "dish": { "name": "Pomegranate Acai Salad" },
+  "matchStatus": "PARTIAL_MATCH",
+  "matchDetails": {
+    "dietCompatibility": ["Vegetarian"],  # Not vegan due to feta
+    "allergenConflicts": ["Dairy"],
+    "modificationHints": [
+      {
+        "action": "REMOVE",
+        "ingredient": "Feta Cheese",
+        "reason": "Contains Dairy",
+        "resultingStatus": "MATCH"
+      }
+    ]
+  }
+}
+```
+
+<Info>
+**Partial Match is powerful UX.** Instead of hiding dishes, show diners how to make them work: "Remove Feta Cheese to make this dairy-free."
+</Info>
+
+### Not a Match (Red)
+
+The dish **cannot be made compatible**:
+
+- Contains an excluded allergen that can't be removed
+- Fundamentally incompatible with the diet (e.g., steak for a vegan)
+- Core ingredients conflict with preferences
+
+```graphql
+{
+  "dish": { "name": "Garlic Butter Shrimp" },
+  "matchStatus": "NOT_A_MATCH",
+  "matchDetails": {
+    "dietCompatibility": [],
+    "allergenConflicts": ["Shellfish", "Dairy"],
+    "canBeModified": false,
+    "reason": "Core ingredient (shrimp) contains Shellfish allergen"
+  }
+}
+```
+
+### Unknown Match
+
+In some cases, the system can't determine compatibility:
+
+- Missing allergen data for the dish
+- Customizable dish where compatibility depends on selections
+
+```graphql
+{
+  "dish": { "name": "Create Your Own Stir-Fry" },
+  "matchStatus": "UNKNOWN",
+  "matchDetails": {
+    "reason": "Compatibility depends on ingredient selections"
+  }
+}
+```
+
+## Querying with Match Status
+
+### Get Dishes with Match Info
+
+```graphql
+query {
+  dishes(
+    menuKey: "your_key",
+    dinerPreferences: {
+      diets: [Vegan],
+      excludeAllergens: [Dairy]
+    }
+  ) {
+    results {
+      dish {
+        id
+        name
+        calories
+      }
+      matchStatus
+      matchDetails {
+        dietCompatibility
+        allergenConflicts
+        modificationHints {
+          action
+          ingredient
+          reason
+        }
+      }
+    }
+    counts {
+      matches
+      partialMatches
+      notAMatch
+    }
+  }
+}
+```
+
+### Filter by Match Status
+
+Only show matches:
+
+```graphql
+query {
+  dishes(
+    menuKey: "your_key",
+    dinerPreferences: { ... },
+    filters: {
+      matchStatus: [MATCH]  # Only full matches
+    }
+  ) { ... }
+}
+```
+
+Or matches and partial matches:
+
+```graphql
+filters: {
+  matchStatus: [MATCH, PARTIAL_MATCH]
+}
+```
+
+## Match Status for Customizable Dishes
+
+For build-your-own dishes, match status **updates in real-time** as the diner makes selections:
+
+<Frame>
+![Customization Flow](/images/smartmenu-screenshots/06-dish-customization-nutrition-update.png)
+</Frame>
+
+```graphql
+# Initial query - status is UNKNOWN
+{
+  "dish": { "name": "Create Your Own Stir-Fry" },
+  "matchStatus": "UNKNOWN"
+}
+
+# After selecting "Brown Rice (v, gf)" as base
+{
+  "dish": { "name": "Create Your Own Stir-Fry" },
+  "matchStatus": "MATCH",
+  "selections": [
+    { "category": "Base", "item": "Brown Rice", "diets": ["Vegan", "GlutenFree"] }
+  ]
+}
+
+# After selecting "Freshly Made Egg White Noodles" instead
+{
+  "dish": { "name": "Create Your Own Stir-Fry" },
+  "matchStatus": "PARTIAL_MATCH",  # Contains egg
+  "allergenConflicts": ["Egg"]
+}
+```
+
+Use the [Nutrition Calculator](/menu-api/functions/nutrition-calculator) to recalculate match status as selections change.
+
+## Displaying Match Status
+
+### Visual Indicators
+
+| Status | Color | Icon | Badge Text |
+|--------|-------|------|------------|
+| Match | Green (#22C55E) | Checkmark | "Match" |
+| Partial Match | Orange (#F59E0B) | Half-circle | "Partial Match" |
+| Not a Match | Red (#EF4444) | X mark | "Not a Match" |
+| Unknown | Gray (#6B7280) | Question mark | "Unknown" |
+
+### Match Summary Bar
+
+Show aggregate counts at the top of results:
+
+```jsx
+<div className="match-summary">
+  <span className="match">{counts.matches} Match</span>
+  <span className="partial">{counts.partialMatches} Partial Match</span>
+  <span className="no-match">{counts.notAMatch} Not a Match</span>
+</div>
+```
+
+### Modification Hints UI
+
+For Partial Matches, show actionable guidance:
+
+```jsx
+{matchStatus === 'PARTIAL_MATCH' && (
+  <div className="modification-hint">
+    <span>Make this dish work for you:</span>
+    {modificationHints.map(hint => (
+      <button key={hint.ingredient}>
+        {hint.action} {hint.ingredient}
+      </button>
+    ))}
+  </div>
+)}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Always show Not a Match dishes (with warning)">
+    Don't hide incompatible dishes completely. Diners may be ordering for a group or might want to know what they're missing. Show them with clear warnings.
+  </Accordion>
+
+  <Accordion title="Make Partial Match actionable">
+    Don't just show orange. Tell the diner exactly what to change: "Remove Feta to make dairy-free." This turns a near-miss into a win.
+  </Accordion>
+
+  <Accordion title="Update counts in real-time">
+    As diners adjust filters, update the match summary immediately. This gives feedback that their filters are working.
+  </Accordion>
+
+  <Accordion title="Handle Unknown gracefully">
+    For customizable dishes, show "Match depends on your selections" rather than leaving diners confused.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Filter Function" icon="filter" href="/menu-api/functions/filter">
+    Build advanced filtering UIs
+  </Card>
+  <Card title="Nutrition Calculator" icon="calculator" href="/menu-api/functions/nutrition-calculator">
+    Handle customizable dishes
+  </Card>
+</CardGroup>

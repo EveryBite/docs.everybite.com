@@ -1,0 +1,326 @@
+---
+title: Meta-Loyalty
+description: All loyalty programs unified under one identity
+---
+
+# Meta-Loyalty
+
+Passport Meta-Loyalty connects multiple restaurant loyalty programs under one identity. Diners manage all their rewards in one place, and programs work seamlessly across participating restaurants.
+
+## The Vision
+
+> **One Passport, all your loyalty programs.**
+
+Instead of juggling separate apps for every restaurant's rewards program, diners connect them all to their Passport. When they visit a participating restaurant, their loyalty is recognized automatically.
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                  EVERYBITE PASSPORT                      │
+├─────────────────────────────────────────────────────────┤
+│                                                          │
+│  Connected Loyalty Programs:                             │
+│                                                          │
+│  ┌─────────────────┐  ┌─────────────────┐               │
+│  │ 🍯 Honeygrow    │  │ ☕ Starbucks    │               │
+│  │ Rewards         │  │ Rewards         │               │
+│  │ 2,450 points    │  │ 125 stars       │               │
+│  │ Gold Status     │  │ Green Level     │               │
+│  └─────────────────┘  └─────────────────┘               │
+│                                                          │
+│  ┌─────────────────┐  ┌─────────────────┐               │
+│  │ 🌯 Chipotle     │  │ 🍕 &pizza       │               │
+│  │ Rewards         │  │ Rewards         │               │
+│  │ 890 points      │  │ 340 points      │               │
+│  └─────────────────┘  └─────────────────┘               │
+│                                                          │
+└─────────────────────────────────────────────────────────┘
+```
+
+## Reading Loyalty Programs
+
+```graphql
+query GetLoyaltyPrograms($token: String!) {
+  passport(token: $token) {
+    loyaltyPrograms {
+      id
+      program {
+        id
+        name
+        brand
+        logoUrl
+      }
+      memberId
+      points
+      tier {
+        name
+        benefits
+      }
+      connectedAt
+    }
+  }
+}
+```
+
+### Example Response
+
+```json
+{
+  "data": {
+    "passport": {
+      "loyaltyPrograms": [
+        {
+          "id": "loyalty_1",
+          "program": {
+            "id": "prog_honeygrow",
+            "name": "Honeygrow Rewards",
+            "brand": "Honeygrow",
+            "logoUrl": "https://..."
+          },
+          "memberId": "HG123456",
+          "points": 2450,
+          "tier": {
+            "name": "Gold",
+            "benefits": ["Free drink with every order", "Birthday reward"]
+          },
+          "connectedAt": "2025-01-15T10:00:00Z"
+        }
+      ]
+    }
+  }
+}
+```
+
+## Connecting a Program
+
+### Via OAuth
+
+```graphql
+mutation ConnectLoyaltyProgram(
+  $token: String!,
+  $programId: ID!,
+  $authCode: String!
+) {
+  connectLoyaltyProgram(
+    token: $token,
+    programId: $programId,
+    authCode: $authCode
+  ) {
+    loyaltyConnection {
+      id
+      points
+      tier { name }
+    }
+  }
+}
+```
+
+### Via Member ID
+
+```graphql
+mutation ConnectByMemberId(
+  $token: String!,
+  $programId: ID!,
+  $memberId: String!,
+  $verificationCode: String
+) {
+  connectLoyaltyByMemberId(
+    token: $token,
+    programId: $programId,
+    memberId: $memberId,
+    verificationCode: $verificationCode
+  ) {
+    loyaltyConnection {
+      id
+      status  # PENDING_VERIFICATION, CONNECTED
+    }
+  }
+}
+```
+
+## Automatic Recognition
+
+When a diner visits a participating restaurant:
+
+1. **Diner opens menu** or starts ordering
+2. **Passport checks** for compatible loyalty programs
+3. **Program recognized** - points/rewards applied automatically
+4. **No manual entry** required
+
+```graphql
+# Check if any loyalty programs apply at a restaurant
+query CheckLoyalty($token: String!, $restaurantId: ID!) {
+  loyaltyAtRestaurant(token: $token, restaurantId: $restaurantId) {
+    availablePrograms {
+      program { name }
+      currentPoints
+      pointsToNextReward
+      availableRewards {
+        id
+        name
+        pointsCost
+      }
+    }
+  }
+}
+```
+
+## Earning Points
+
+Points are earned automatically when ordering:
+
+```graphql
+# After completing an order
+{
+  "orderComplete": {
+    "order": { ... },
+    "loyaltyEarned": {
+      "program": "Honeygrow Rewards",
+      "pointsEarned": 53,
+      "newBalance": 2503,
+      "tierProgress": {
+        "current": "Gold",
+        "pointsToNext": 497,
+        "nextTier": "Platinum"
+      }
+    }
+  }
+}
+```
+
+## Redeeming Rewards
+
+```graphql
+mutation RedeemReward(
+  $token: String!,
+  $loyaltyId: ID!,
+  $rewardId: ID!,
+  $orderId: ID!
+) {
+  redeemLoyaltyReward(
+    token: $token,
+    loyaltyId: $loyaltyId,
+    rewardId: $rewardId,
+    orderId: $orderId
+  ) {
+    success
+    newPointBalance
+    appliedDiscount {
+      amount
+      description
+    }
+  }
+}
+```
+
+## Cross-Brand Rewards
+
+The meta-loyalty vision includes cross-brand rewards:
+
+```graphql
+query CrossBrandRewards($token: String!) {
+  passport(token: $token) {
+    crossBrandRewards {
+      id
+      name
+      description
+      validAt {
+        brands
+        restaurants
+      }
+      requirements {
+        points
+        fromPrograms
+      }
+    }
+  }
+}
+```
+
+<Info>
+Cross-brand rewards are an advanced feature that requires brand participation. Not all programs support cross-redemption.
+</Info>
+
+## UI Pattern
+
+### Loyalty Dashboard
+
+```jsx
+function LoyaltyDashboard({ passportToken }) {
+  const { data } = useQuery(GET_LOYALTY_PROGRAMS, {
+    variables: { token: passportToken }
+  });
+
+  const programs = data?.passport?.loyaltyPrograms || [];
+
+  return (
+    <div className="loyalty-dashboard">
+      <h1>My Rewards</h1>
+
+      <div className="programs-grid">
+        {programs.map(({ program, points, tier }) => (
+          <div key={program.id} className="program-card">
+            <img src={program.logoUrl} alt={program.name} />
+            <h3>{program.name}</h3>
+            <div className="points">{points.toLocaleString()} points</div>
+            {tier && <div className="tier">{tier.name} Member</div>}
+            <button>View Rewards</button>
+          </div>
+        ))}
+      </div>
+
+      <button className="add-program">
+        + Connect a Rewards Program
+      </button>
+    </div>
+  );
+}
+```
+
+### At-Restaurant Recognition
+
+```jsx
+function LoyaltyBanner({ restaurantId, passportToken }) {
+  const { data } = useQuery(CHECK_LOYALTY, {
+    variables: { token: passportToken, restaurantId }
+  });
+
+  const loyalty = data?.loyaltyAtRestaurant?.availablePrograms?.[0];
+
+  if (!loyalty) return null;
+
+  return (
+    <div className="loyalty-banner">
+      <span>🎉 {loyalty.program.name} recognized!</span>
+      <span>{loyalty.currentPoints} points</span>
+      {loyalty.availableRewards.length > 0 && (
+        <button>Redeem Reward</button>
+      )}
+    </div>
+  );
+}
+```
+
+## Disconnecting
+
+```graphql
+mutation DisconnectLoyalty($token: String!, $loyaltyId: ID!) {
+  disconnectLoyaltyProgram(token: $token, loyaltyId: $loyaltyId) {
+    success
+  }
+}
+```
+
+<Warning>
+Disconnecting removes the link from Passport but does not affect the underlying loyalty program. Points remain in the original program.
+</Warning>
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Passport Overview" icon="passport" href="/passport/overview">
+    The universal dining identity
+  </Card>
+  <Card title="Meal History" icon="clock-rotate-left" href="/passport/meal-history">
+    Track your dining history
+  </Card>
+</CardGroup>
