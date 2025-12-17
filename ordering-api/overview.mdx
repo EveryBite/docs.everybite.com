@@ -1,6 +1,6 @@
 ---
 title: Ordering API
-description: Cart, checkout, and fulfillment
+description: Unified ordering layer on top of existing ordering systems
 sidebarTitle: Overview
 ---
 
@@ -10,41 +10,210 @@ sidebarTitle: Overview
 The Ordering API is a separate product. Contact sales@everybite.com for access.
 </Info>
 
-The Ordering API enables cart management, checkout, and order fulfillment for EveryBite-enabled restaurants.
+The EveryBite Ordering API provides a **unified abstraction layer** on top of existing restaurant ordering platforms. Instead of integrating directly with multiple ordering systems, you integrate once with EveryBite and gain access to all supported platforms.
+
+## Architecture
+
+<Frame>
+  ![Ordering API Architecture](/images/ordering-architecture.svg)
+</Frame>
+
+Your application integrates with the EveryBite Ordering API once, and we handle communication with the underlying ordering platforms. The EveryBite layer adds:
+
+- **Unified Cart Management** - Consistent cart operations across all platforms
+- **Nutrition Tracking** - Real-time nutrition data for every item
+- **Allergen Warnings** - Automatic alerts based on diner preferences
+- **Passport Integration** - Saved addresses, payment methods, preferences
+- **Loyalty Auto-Apply** - Connected loyalty programs applied at checkout
+- **Meal History** - Orders recorded with full nutrition data
+
+## Why Use EveryBite Ordering?
+
+Instead of integrating directly with Olo (or other platforms), EveryBite provides:
+
+| Direct Integration | EveryBite Ordering |
+|-------------------|-------------------|
+| Platform-specific APIs | Single unified API |
+| Separate nutrition lookup | Nutrition built into cart |
+| Manual allergen checks | Automatic allergen warnings |
+| No preference matching | Passport preferences applied |
+| Separate loyalty integration | Auto-apply connected loyalty |
+| Platform-specific webhooks | Unified webhook format |
+
+## Supported Platforms
+
+### Olo (Active)
+
+<Card title="Olo Integration" icon="check-circle">
+  Full integration with Olo's ordering platform including menu sync, cart management, checkout, and order tracking.
+</Card>
+
+**Supported Olo Features:**
+- Menu and availability sync
+- Cart operations (add, update, remove)
+- Order types: pickup, delivery, curbside
+- Time slot scheduling (ASAP and future orders)
+- Payment processing
+- Order status and tracking
+- Dispatch integration for delivery
+
+### Coming Soon
+
+- Toast
+- Square
+- Chowly
+- Additional platforms based on demand
 
 ## Capabilities
 
 <CardGroup cols={2}>
   <Card title="Cart Management" icon="cart-shopping">
-    Add dishes, manage quantities, apply customizations
+    Add dishes, manage quantities, apply customizations with real-time nutrition updates
   </Card>
   <Card title="Order Types" icon="truck">
-    Pickup and delivery support
+    Pickup, delivery, curbside, and dine-in support
   </Card>
   <Card title="Location Selection" icon="location-dot">
     Find restaurants, check availability, schedule orders
   </Card>
   <Card title="Checkout" icon="credit-card">
-    Payment processing, tips, order confirmation
+    Payment processing, tips, promo codes, order confirmation
   </Card>
 </CardGroup>
 
-## Integration with Menu API
+## How It Works
 
-The Ordering API works seamlessly with the Menu API:
+### 1. Browse Menu (Menu API)
+
+Query dishes with EveryBite's nutrition and allergen data:
 
 ```graphql
-# 1. Query dishes with Menu API
 query {
-  dishes(menuKey: "...", filters: {...}) {
-    results { dish { id, name, price } }
+  dishes(menuKey: "mk_honeygrow", preferences: { avoidAllergens: [PEANUT] }) {
+    results {
+      dish {
+        id
+        name
+        price
+        nutrition { calories, protein }
+        allergens { type, displayName }
+      }
+      matchStatus
+    }
   }
 }
+```
 
-# 2. Add to cart with Ordering API
-mutation {
-  addToCart(dishId: "dish_123", quantity: 1) {
-    cart { items { ... } }
+### 2. Add to Cart (Ordering API)
+
+Add items with full EveryBite context:
+
+```graphql
+mutation AddToCart($input: AddToCartInput!) {
+  addToCart(input: $input) {
+    cart {
+      id
+      items {
+        id
+        dish { name, price }
+        quantity
+        customizations { name, price }
+        nutrition { calories }  # Real-time nutrition for customized item
+      }
+      subtotal
+      estimatedTotal
+    }
+    allergenWarnings {
+      allergen
+      severity
+      dishName
+    }
+  }
+}
+```
+
+### 3. Select Fulfillment
+
+Choose pickup or delivery:
+
+```graphql
+mutation SetFulfillment($cartId: ID!, $fulfillment: FulfillmentInput!) {
+  setFulfillment(cartId: $cartId, fulfillment: $fulfillment) {
+    cart {
+      fulfillment {
+        type          # PICKUP, DELIVERY, CURBSIDE
+        scheduledTime # null for ASAP
+        address {     # For delivery
+          street1
+          city
+          state
+          postalCode
+        }
+      }
+      deliveryFee
+      estimatedTotal
+    }
+    availableTimeSlots {
+      time
+      available
+    }
+  }
+}
+```
+
+### 4. Checkout
+
+Complete the order:
+
+```graphql
+mutation Checkout($cartId: ID!, $payment: PaymentInput!) {
+  checkout(cartId: $cartId, payment: $payment) {
+    order {
+      id
+      status
+      confirmationNumber
+      estimatedReadyTime
+      trackingUrl
+    }
+    loyaltyEarned {
+      program
+      pointsEarned
+      newBalance
+    }
+    receipt {
+      items { name, quantity, price }
+      subtotal
+      tax
+      tip
+      total
+    }
+  }
+}
+```
+
+## Integration with Menu API
+
+The Ordering API enriches cart data with Menu API information:
+
+- **Nutrition totals** - Cart shows total calories, macros for entire order
+- **Allergen warnings** - Automatic alerts if cart contains user's allergens
+- **Match status** - See if items match diner's preferences
+
+```graphql
+query GetCartWithNutrition($cartId: ID!) {
+  cart(id: $cartId) {
+    items {
+      dish { name }
+      nutrition { calories, protein, carbohydrates, fat }
+    }
+    totals {
+      nutrition {
+        calories      # Total for entire order
+        protein
+        carbohydrates
+        fat
+      }
+    }
   }
 }
 ```
@@ -53,35 +222,123 @@ mutation {
 
 When a diner has an EveryBite Passport:
 
-- **Saved addresses** auto-populate for delivery
-- **Loyalty programs** apply automatically
-- **Meal history** records the order
-- **Preferences** ensure allergen warnings display
+| Feature | Behavior |
+|---------|----------|
+| **Saved addresses** | Auto-populate delivery address |
+| **Payment methods** | Saved cards available at checkout |
+| **Loyalty programs** | Points earned/redeemed automatically |
+| **Allergen warnings** | Based on Passport preferences |
+| **Meal history** | Order recorded with full nutrition |
+| **Health sync** | Meal synced to Apple Health/Google Fit |
+
+```graphql
+# Passport-authenticated checkout
+mutation CheckoutWithPassport(
+  $cartId: ID!
+  $passportToken: String!
+  $payment: PaymentInput!
+) {
+  checkout(
+    cartId: $cartId
+    passportToken: $passportToken
+    payment: $payment
+  ) {
+    order { id, confirmationNumber }
+
+    # Automatic Passport benefits
+    loyaltyEarned {
+      program
+      pointsEarned
+    }
+    mealRecorded {
+      id
+      nutrition { calories }
+    }
+    healthSyncStatus  # SYNCED, PENDING, DISABLED
+  }
+}
+```
+
+## Olo-Specific Features
+
+When the backend is Olo, these additional features are available:
+
+### Basket Transfer
+
+Transfer an existing Olo basket to EveryBite:
+
+```graphql
+mutation ImportOloBasket($oloBasketId: String!) {
+  importOloBasket(basketId: $oloBasketId) {
+    cart {
+      id
+      items { ... }
+    }
+  }
+}
+```
+
+### Olo Webhooks
+
+EveryBite forwards Olo webhook events in a normalized format:
+
+```json
+{
+  "event": "ORDER_STATUS_CHANGED",
+  "orderId": "order_123",
+  "everyBiteOrderId": "eb_order_456",
+  "oloOrderId": "olo_789",
+  "status": "READY_FOR_PICKUP",
+  "timestamp": "2025-12-17T12:30:00Z"
+}
+```
+
+### Dispatch Integration
+
+For Olo Dispatch (delivery):
+
+```graphql
+query TrackDelivery($orderId: ID!) {
+  order(id: $orderId) {
+    delivery {
+      status          # ASSIGNED, EN_ROUTE, ARRIVING, DELIVERED
+      driver {
+        name
+        phone
+        photoUrl
+      }
+      eta
+      currentLocation {
+        latitude
+        longitude
+      }
+    }
+  }
+}
+```
 
 ## Preview
 
 <Frame>
-![Order Modal](/images/smartmenu-screenshots/09-order-modal-pickup-location.png)
+  ![Order Modal](/images/smartmenu-screenshots/09-order-modal-pickup-location.png)
 </Frame>
 
 <Frame>
-![Checkout](/images/smartmenu-screenshots/12-checkout-page.png)
+  ![Checkout](/images/smartmenu-screenshots/12-checkout-page.png)
 </Frame>
 
-## Coming Soon
+## API Reference
 
-Full documentation for the Ordering API including:
+Full Ordering API documentation:
 
-- Cart operations
-- Order types (pickup, delivery, dine-in)
-- Restaurant availability
-- Time slot scheduling
-- Payment processing
-- Order tracking
-- Webhook notifications
+- [Cart Operations](/ordering-api/cart)
+- [Fulfillment](/ordering-api/fulfillment)
+- [Checkout](/ordering-api/checkout)
+- [Order Tracking](/ordering-api/tracking)
+- [Webhooks](/ordering-api/webhooks)
 
 ## Request Access
 
 <Card title="Contact Sales" icon="envelope" href="mailto:sales@everybite.com">
-  Interested in the Ordering API? Contact our sales team.
+  Interested in the Ordering API? Contact our sales team to discuss integration.
 </Card>
