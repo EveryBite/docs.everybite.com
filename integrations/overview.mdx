@@ -9,31 +9,15 @@ EveryBite integrates with your existing restaurant technology stack. Pull nutrit
 
 ## Integration Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      YOUR RESTAURANT                             │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│   INBOUND                 EVERYBITE              OUTBOUND        │
-│   ────────                ─────────              ────────        │
-│                                                                  │
-│   MenuCalc ──────►  ┌─────────────────┐  ──────► POS Systems    │
-│   (Nutrition)       │                 │         (Menu Sync)     │
-│                     │   Menu Data     │                         │
-│   Recipe Mgmt ────► │   + Nutrition   │  ──────► Delivery Apps  │
-│   Systems           │   + Allergens   │         (DoorDash, etc) │
-│                     │                 │                         │
-│   POS Import ─────► │                 │  ──────► CrunchTime     │
-│                     └─────────────────┘         (Operations)    │
-│                                                                  │
-│   BIDIRECTIONAL                                                  │
-│   ─────────────                                                  │
-│                                                                  │
-│   Thanx ◄────────────────────────────────────────────► Loyalty  │
-│   Punchh ◄───────────────────────────────────────────► Rewards  │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
-```
+<Frame>
+  ![Integration Architecture](/images/integrations-architecture.svg)
+</Frame>
+
+EveryBite acts as the central hub for your restaurant data, with three types of integrations:
+
+- **Inbound** - Pull data from nutrition systems, recipe databases, and POS platforms into EveryBite
+- **Outbound** - Push enriched menu data to delivery apps, digital signage, and operations systems
+- **Bidirectional** - Two-way sync with loyalty platforms for real-time consistency
 
 ## Integration Types
 
