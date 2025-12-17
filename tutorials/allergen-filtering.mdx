@@ -1,0 +1,351 @@
+---
+title: Add Allergen Filtering to Your App
+description: Implement safe allergen detection and filtering
+---
+
+# Add Allergen Filtering to Your App
+
+Allergen safety is critical. This tutorial shows you how to implement comprehensive allergen filtering that protects users with food allergies.
+
+## What You'll Build
+
+An allergen-aware menu system that:
+- Filters out dishes containing specific allergens
+- Warns users about cross-contamination risks
+- Shows which dishes can be modified to remove allergens
+- Displays clear allergen badges on each dish
+
+## The Allergen Types
+
+EveryBite tracks these allergens:
+
+| Allergen | API Value | Notes |
+|----------|-----------|-------|
+| Milk/Dairy | `DAIRY` | Includes lactose |
+| Eggs | `EGG` | Whole eggs and derivatives |
+| Peanuts | `PEANUT` | Ground nuts |
+| Tree Nuts | `TREE_NUT` | Almonds, walnuts, etc. |
+| Wheat/Gluten | `GLUTEN` | Includes barley, rye |
+| Soy | `SOY` | Soybeans and derivatives |
+| Fish | `FISH` | All fish species |
+| Shellfish | `SHELLFISH` | Crustaceans and mollusks |
+| Sesame | `SESAME` | Seeds and oil |
+
+## Step 1: Query with Allergen Filters
+
+```graphql
+query GetSafeDishes(
+  $menuKey: String!
+  $avoidAllergens: [AllergenType!]!
+) {
+  dishes(
+    menuKey: $menuKey
+    preferences: {
+      avoidAllergens: $avoidAllergens
+    }
+  ) {
+    results {
+      dish {
+        id
+        name
+        allergens {
+          type
+          displayName
+          severity  # CONTAINS, MAY_CONTAIN, FACILITY
+        }
+      }
+      matchStatus
+      modifications {
+        description
+        removeAllergens
+      }
+    }
+  }
+}
+```
+
+## Step 2: Understanding Allergen Severity
+
+EveryBite distinguishes between levels of allergen presence:
+
+```jsx
+const SEVERITY_LEVELS = {
+  CONTAINS: {
+    label: 'Contains',
+    color: '#dc2626',
+    icon: '⛔',
+    description: 'This dish contains the allergen as an ingredient'
+  },
+  MAY_CONTAIN: {
+    label: 'May Contain',
+    color: '#f59e0b',
+    icon: '⚠️',
+    description: 'Cross-contact possible during preparation'
+  },
+  FACILITY: {
+    label: 'Facility Warning',
+    color: '#6b7280',
+    icon: 'ℹ️',
+    description: 'Processed in a facility that handles this allergen'
+  }
+};
+```
+
+## Step 3: Build the Allergen Selector
+
+```jsx
+// components/AllergenSelector.jsx
+import React from 'react';
+
+const ALLERGENS = [
+  { type: 'DAIRY', label: 'Dairy', icon: '🥛' },
+  { type: 'EGG', label: 'Eggs', icon: '🥚' },
+  { type: 'PEANUT', label: 'Peanuts', icon: '🥜' },
+  { type: 'TREE_NUT', label: 'Tree Nuts', icon: '🌰' },
+  { type: 'GLUTEN', label: 'Gluten', icon: '🌾' },
+  { type: 'SOY', label: 'Soy', icon: '🫘' },
+  { type: 'FISH', label: 'Fish', icon: '🐟' },
+  { type: 'SHELLFISH', label: 'Shellfish', icon: '🦐' },
+  { type: 'SESAME', label: 'Sesame', icon: '⚪' },
+];
+
+export function AllergenSelector({ selected, onChange }) {
+  const toggle = (allergen) => {
+    if (selected.includes(allergen)) {
+      onChange(selected.filter(a => a !== allergen));
+    } else {
+      onChange([...selected, allergen]);
+    }
+  };
+
+  return (
+    <div className="allergen-selector">
+      <h3>I need to avoid:</h3>
+      <div className="allergen-grid">
+        {ALLERGENS.map(allergen => (
+          <button
+            key={allergen.type}
+            className={`allergen-btn ${selected.includes(allergen.type) ? 'selected' : ''}`}
+            onClick={() => toggle(allergen.type)}
+          >
+            <span className="icon">{allergen.icon}</span>
+            <span className="label">{allergen.label}</span>
+            {selected.includes(allergen.type) && (
+              <span className="check">✓</span>
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+```
+
+## Step 4: Display Allergen Warnings
+
+```jsx
+// components/AllergenBadges.jsx
+import React from 'react';
+
+export function AllergenBadges({ allergens, userAllergens = [] }) {
+  // Sort: user's allergens first, then by severity
+  const sorted = [...allergens].sort((a, b) => {
+    const aIsUser = userAllergens.includes(a.type);
+    const bIsUser = userAllergens.includes(b.type);
+    if (aIsUser && !bIsUser) return -1;
+    if (!aIsUser && bIsUser) return 1;
+    return 0;
+  });
+
+  return (
+    <div className="allergen-badges">
+      {sorted.map(allergen => {
+        const isUserAllergen = userAllergens.includes(allergen.type);
+
+        return (
+          <span
+            key={allergen.type}
+            className={`badge ${allergen.severity.toLowerCase()} ${isUserAllergen ? 'danger' : ''}`}
+            title={`${allergen.severity}: ${allergen.displayName}`}
+          >
+            {isUserAllergen && '⚠️ '}
+            {allergen.displayName}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+```
+
+## Step 5: Show Modification Options
+
+For partial matches, show users how to make a dish safe:
+
+```jsx
+// components/ModificationSuggestion.jsx
+import React from 'react';
+
+export function ModificationSuggestion({ modifications, onApply }) {
+  if (!modifications || modifications.length === 0) return null;
+
+  return (
+    <div className="modification-suggestion">
+      <h4>Make it safe for you:</h4>
+      {modifications.map((mod, index) => (
+        <div key={index} className="modification">
+          <p>{mod.description}</p>
+          <div className="removes">
+            Removes: {mod.removeAllergens.join(', ')}
+          </div>
+          <button onClick={() => onApply(mod)}>
+            Apply This Modification
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+## Step 6: Complete Implementation
+
+```jsx
+// App.jsx
+import React, { useState } from 'react';
+import { useQuery } from '@apollo/client';
+import { AllergenSelector } from './components/AllergenSelector';
+import { AllergenBadges } from './components/AllergenBadges';
+import { ModificationSuggestion } from './components/ModificationSuggestion';
+
+const GET_DISHES = gql`...`; // from Step 1
+
+function App() {
+  const [avoidAllergens, setAvoidAllergens] = useState([]);
+  const [showUnsafe, setShowUnsafe] = useState(false);
+
+  const { data, loading } = useQuery(GET_DISHES, {
+    variables: {
+      menuKey: process.env.REACT_APP_MENU_KEY,
+      avoidAllergens
+    }
+  });
+
+  const dishes = data?.dishes?.results || [];
+
+  // Separate safe from unsafe
+  const safeDishes = dishes.filter(d => d.matchStatus === 'MATCH');
+  const modifiable = dishes.filter(d => d.matchStatus === 'PARTIAL_MATCH');
+  const unsafe = dishes.filter(d => d.matchStatus === 'NO_MATCH');
+
+  return (
+    <div className="app">
+      <header>
+        <h1>Allergen-Safe Menu</h1>
+        <AllergenSelector
+          selected={avoidAllergens}
+          onChange={setAvoidAllergens}
+        />
+      </header>
+
+      {avoidAllergens.length > 0 && (
+        <div className="safety-summary">
+          <div className="safe">
+            ✅ {safeDishes.length} dishes are safe for you
+          </div>
+          <div className="modifiable">
+            🔄 {modifiable.length} can be modified
+          </div>
+          <div className="unsafe">
+            ⛔ {unsafe.length} contain your allergens
+          </div>
+        </div>
+      )}
+
+      <section className="safe-dishes">
+        <h2>Safe For You</h2>
+        {safeDishes.map(({ dish }) => (
+          <div key={dish.id} className="dish-card safe">
+            <h3>{dish.name}</h3>
+            <AllergenBadges
+              allergens={dish.allergens}
+              userAllergens={avoidAllergens}
+            />
+          </div>
+        ))}
+      </section>
+
+      <section className="modifiable-dishes">
+        <h2>Can Be Made Safe</h2>
+        {modifiable.map(({ dish, modifications }) => (
+          <div key={dish.id} className="dish-card modifiable">
+            <h3>{dish.name}</h3>
+            <AllergenBadges
+              allergens={dish.allergens}
+              userAllergens={avoidAllergens}
+            />
+            <ModificationSuggestion
+              modifications={modifications}
+              onApply={(mod) => console.log('Apply:', mod)}
+            />
+          </div>
+        ))}
+      </section>
+
+      <section className="unsafe-dishes">
+        <h2>
+          <button onClick={() => setShowUnsafe(!showUnsafe)}>
+            {showUnsafe ? 'Hide' : 'Show'} Unsafe Dishes ({unsafe.length})
+          </button>
+        </h2>
+        {showUnsafe && unsafe.map(({ dish }) => (
+          <div key={dish.id} className="dish-card unsafe">
+            <h3>{dish.name}</h3>
+            <AllergenBadges
+              allergens={dish.allergens}
+              userAllergens={avoidAllergens}
+            />
+            <div className="warning">
+              ⚠️ Contains allergens you're avoiding
+            </div>
+          </div>
+        ))}
+      </section>
+    </div>
+  );
+}
+```
+
+## Best Practices for Allergen Safety
+
+<Warning>
+Always display allergen information prominently. Food allergies can be life-threatening.
+</Warning>
+
+### Do:
+- Show allergen warnings before users can add to cart
+- Distinguish between "contains" and "may contain"
+- Allow users to save their allergen profile
+- Require confirmation before ordering dishes with warnings
+
+### Don't:
+- Hide allergen information behind clicks
+- Assume modifications remove all traces
+- Let users dismiss warnings without reading them
+
+## Legal Disclaimer
+
+<Note>
+EveryBite provides allergen information as reported by restaurants. Always verify with restaurant staff for severe allergies. Cross-contamination is possible in any kitchen.
+</Note>
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Dietary Menu Browser" icon="utensils" href="/tutorials/dietary-menu-browser">
+    Filter by diets and preferences
+  </Card>
+  <Card title="Match Status" icon="check-circle" href="/concepts/match-status">
+    How matching works
+  </Card>
+</CardGroup>

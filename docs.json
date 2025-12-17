@@ -44,9 +44,24 @@
               {
                 "group": "Core Concepts",
                 "pages": [
+                  "concepts/architecture",
                   "concepts/hierarchy",
                   "concepts/diner-preferences",
                   "concepts/match-status"
+                ]
+              },
+              {
+                "group": "Tutorials",
+                "pages": [
+                  "tutorials/dietary-menu-browser",
+                  "tutorials/allergen-filtering",
+                  "tutorials/passport-integration"
+                ]
+              },
+              {
+                "group": "Production",
+                "pages": [
+                  "best-practices"
                 ]
               }
             ]
@@ -113,7 +128,8 @@
               {
                 "group": "API Reference",
                 "pages": [
-                  "api-reference/overview"
+                  "api-reference/overview",
+                  "api-reference/schema"
                 ]
               }
             ]

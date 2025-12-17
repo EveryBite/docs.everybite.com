@@ -1,0 +1,504 @@
+---
+title: Connect Loyalty Programs with Passport
+description: Integrate Passport for cross-restaurant loyalty and preferences
+---
+
+# Connect Loyalty Programs with Passport
+
+Passport is EveryBite's universal dining identity. In this tutorial, you'll integrate Passport to give users persistent preferences, saved dishes across restaurants, and unified loyalty program management.
+
+## What You'll Build
+
+A Passport integration that:
+- Authenticates users with EveryBite Passport
+- Syncs dietary preferences across sessions
+- Displays connected loyalty programs
+- Shows loyalty points at checkout
+
+## Understanding Passport
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    USER'S PASSPORT                           │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Preferences        Saved Dishes       Loyalty Programs      │
+│  ────────────       ───────────       ─────────────────      │
+│  • Vegan            • Curry Bowl      • Chipotle: 890 pts    │
+│  • No Peanuts         @ Honeygrow     • Starbucks: 125 stars │
+│  • Low Sodium       • Burrito Bowl    • &pizza: 340 pts      │
+│                       @ Chipotle                              │
+│                                                              │
+│  Meal History                         Health Connections     │
+│  ────────────                         ──────────────────     │
+│  • Dec 16: Curry Bowl, 530 cal        • Apple Health ✓       │
+│  • Dec 15: Salad, 400 cal             • Google Fit ✓         │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Step 1: Implement Passport Authentication
+
+### OAuth Flow
+
+```jsx
+// services/passport.js
+
+const PASSPORT_AUTH_URL = 'https://passport.everybite.com/oauth/authorize';
+const PASSPORT_TOKEN_URL = 'https://passport.everybite.com/oauth/token';
+
+export function initiatePassportLogin() {
+  const params = new URLSearchParams({
+    client_id: process.env.REACT_APP_PASSPORT_CLIENT_ID,
+    redirect_uri: `${window.location.origin}/auth/callback`,
+    response_type: 'code',
+    scope: 'preferences history loyalty'
+  });
+
+  window.location.href = `${PASSPORT_AUTH_URL}?${params}`;
+}
+
+export async function exchangeCodeForToken(code) {
+  const response = await fetch(PASSPORT_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      grant_type: 'authorization_code',
+      client_id: process.env.REACT_APP_PASSPORT_CLIENT_ID,
+      client_secret: process.env.REACT_APP_PASSPORT_CLIENT_SECRET,
+      code,
+      redirect_uri: `${window.location.origin}/auth/callback`
+    })
+  });
+
+  return response.json();
+}
+```
+
+### Login Button Component
+
+```jsx
+// components/PassportLogin.jsx
+import React from 'react';
+import { initiatePassportLogin } from '../services/passport';
+
+export function PassportLogin() {
+  return (
+    <button
+      className="passport-login-btn"
+      onClick={initiatePassportLogin}
+    >
+      <img src="/passport-icon.svg" alt="" />
+      Continue with EveryBite Passport
+    </button>
+  );
+}
+```
+
+### Auth Callback Handler
+
+```jsx
+// pages/AuthCallback.jsx
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { exchangeCodeForToken } from '../services/passport';
+import { useAuth } from '../context/AuthContext';
+
+export function AuthCallback() {
+  const navigate = useNavigate();
+  const { setPassportToken } = useAuth();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+
+    if (code) {
+      exchangeCodeForToken(code)
+        .then(({ access_token }) => {
+          setPassportToken(access_token);
+          navigate('/');
+        })
+        .catch(console.error);
+    }
+  }, []);
+
+  return <div>Logging you in...</div>;
+}
+```
+
+## Step 2: Fetch User's Passport Data
+
+```graphql
+query GetPassport($token: String!) {
+  passport(token: $token) {
+    user {
+      id
+      name
+      email
+    }
+
+    preferences {
+      diets
+      avoidAllergens
+      calorieTarget
+      nutritionGoals {
+        nutrient
+        minValue
+        maxValue
+      }
+    }
+
+    savedDishes {
+      id
+      dish {
+        id
+        name
+        imageUrl
+      }
+      restaurant {
+        name
+        chainName
+      }
+      savedAt
+    }
+
+    loyaltyPrograms {
+      id
+      program {
+        id
+        name
+        brand
+        logoUrl
+      }
+      memberId
+      points
+      tier {
+        name
+        benefits
+      }
+    }
+  }
+}
+```
+
+## Step 3: Display Connected Loyalty Programs
+
+```jsx
+// components/LoyaltyDashboard.jsx
+import React from 'react';
+import { useQuery, gql } from '@apollo/client';
+import { useAuth } from '../context/AuthContext';
+
+const GET_LOYALTY = gql`
+  query GetLoyalty($token: String!) {
+    passport(token: $token) {
+      loyaltyPrograms {
+        id
+        program {
+          name
+          logoUrl
+        }
+        points
+        tier {
+          name
+        }
+        pointsToNextReward
+      }
+    }
+  }
+`;
+
+export function LoyaltyDashboard() {
+  const { passportToken } = useAuth();
+  const { data, loading } = useQuery(GET_LOYALTY, {
+    variables: { token: passportToken },
+    skip: !passportToken
+  });
+
+  if (!passportToken) {
+    return (
+      <div className="loyalty-cta">
+        <h3>Connect Your Rewards</h3>
+        <p>Link your loyalty programs to manage all your rewards in one place.</p>
+        <PassportLogin />
+      </div>
+    );
+  }
+
+  const programs = data?.passport?.loyaltyPrograms || [];
+
+  return (
+    <div className="loyalty-dashboard">
+      <h2>My Rewards</h2>
+
+      <div className="programs-grid">
+        {programs.map(({ id, program, points, tier, pointsToNextReward }) => (
+          <div key={id} className="program-card">
+            <img src={program.logoUrl} alt={program.name} />
+            <h3>{program.name}</h3>
+            <div className="points">{points.toLocaleString()} points</div>
+            {tier && <div className="tier">{tier.name}</div>}
+            {pointsToNextReward && (
+              <div className="next-reward">
+                {pointsToNextReward} points to next reward
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <button className="add-program">
+        + Connect Another Program
+      </button>
+    </div>
+  );
+}
+```
+
+## Step 4: Connect a New Loyalty Program
+
+```jsx
+// components/ConnectLoyalty.jsx
+import React, { useState } from 'react';
+import { useMutation, gql } from '@apollo/client';
+
+const CONNECT_LOYALTY = gql`
+  mutation ConnectLoyalty(
+    $token: String!
+    $programId: ID!
+    $memberId: String!
+  ) {
+    connectLoyaltyByMemberId(
+      token: $token
+      programId: $programId
+      memberId: $memberId
+    ) {
+      loyaltyConnection {
+        id
+        status
+        points
+      }
+    }
+  }
+`;
+
+const AVAILABLE_PROGRAMS = [
+  { id: 'prog_chipotle', name: 'Chipotle Rewards', logo: '/logos/chipotle.png' },
+  { id: 'prog_starbucks', name: 'Starbucks Rewards', logo: '/logos/starbucks.png' },
+  { id: 'prog_honeygrow', name: 'Honeygrow Rewards', logo: '/logos/honeygrow.png' },
+];
+
+export function ConnectLoyalty({ passportToken, onConnected }) {
+  const [selectedProgram, setSelectedProgram] = useState(null);
+  const [memberId, setMemberId] = useState('');
+
+  const [connectLoyalty, { loading }] = useMutation(CONNECT_LOYALTY, {
+    onCompleted: (data) => {
+      onConnected(data.connectLoyaltyByMemberId.loyaltyConnection);
+    }
+  });
+
+  const handleConnect = () => {
+    connectLoyalty({
+      variables: {
+        token: passportToken,
+        programId: selectedProgram.id,
+        memberId
+      }
+    });
+  };
+
+  return (
+    <div className="connect-loyalty">
+      <h3>Connect a Rewards Program</h3>
+
+      <div className="program-selector">
+        {AVAILABLE_PROGRAMS.map(program => (
+          <button
+            key={program.id}
+            className={selectedProgram?.id === program.id ? 'selected' : ''}
+            onClick={() => setSelectedProgram(program)}
+          >
+            <img src={program.logo} alt={program.name} />
+            {program.name}
+          </button>
+        ))}
+      </div>
+
+      {selectedProgram && (
+        <div className="member-input">
+          <label>Your {selectedProgram.name} Member ID:</label>
+          <input
+            type="text"
+            value={memberId}
+            onChange={(e) => setMemberId(e.target.value)}
+            placeholder="Enter member ID"
+          />
+          <button
+            onClick={handleConnect}
+            disabled={loading || !memberId}
+          >
+            {loading ? 'Connecting...' : 'Connect Program'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+## Step 5: Show Loyalty at Checkout
+
+```jsx
+// components/CheckoutLoyalty.jsx
+import React from 'react';
+import { useQuery, gql } from '@apollo/client';
+
+const CHECK_LOYALTY_AT_RESTAURANT = gql`
+  query CheckLoyalty($token: String!, $restaurantId: ID!) {
+    loyaltyAtRestaurant(token: $token, restaurantId: $restaurantId) {
+      availablePrograms {
+        program {
+          name
+          logoUrl
+        }
+        currentPoints
+        pointsToNextReward
+        availableRewards {
+          id
+          name
+          pointsCost
+        }
+      }
+    }
+  }
+`;
+
+export function CheckoutLoyalty({ passportToken, restaurantId, onRedeemReward }) {
+  const { data } = useQuery(CHECK_LOYALTY_AT_RESTAURANT, {
+    variables: { token: passportToken, restaurantId },
+    skip: !passportToken
+  });
+
+  const loyalty = data?.loyaltyAtRestaurant?.availablePrograms?.[0];
+
+  if (!loyalty) return null;
+
+  return (
+    <div className="checkout-loyalty">
+      <div className="loyalty-banner">
+        <img src={loyalty.program.logoUrl} alt="" />
+        <span>{loyalty.program.name} recognized!</span>
+        <span className="points">{loyalty.currentPoints} points</span>
+      </div>
+
+      {loyalty.availableRewards.length > 0 && (
+        <div className="available-rewards">
+          <h4>Available Rewards:</h4>
+          {loyalty.availableRewards.map(reward => (
+            <button
+              key={reward.id}
+              className="reward-btn"
+              onClick={() => onRedeemReward(reward)}
+            >
+              {reward.name} ({reward.pointsCost} pts)
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="earn-preview">
+        You'll earn ~{Math.floor(cartTotal)} points on this order
+      </div>
+    </div>
+  );
+}
+```
+
+## Step 6: Sync Preferences to API Calls
+
+```jsx
+// hooks/usePassportPreferences.js
+import { useQuery, gql } from '@apollo/client';
+import { useAuth } from '../context/AuthContext';
+
+const GET_PREFERENCES = gql`
+  query GetPreferences($token: String!) {
+    passport(token: $token) {
+      preferences {
+        diets
+        avoidAllergens
+      }
+    }
+  }
+`;
+
+export function usePassportPreferences() {
+  const { passportToken } = useAuth();
+
+  const { data } = useQuery(GET_PREFERENCES, {
+    variables: { token: passportToken },
+    skip: !passportToken
+  });
+
+  // Return preferences, or empty defaults for anonymous users
+  return data?.passport?.preferences || {
+    diets: [],
+    avoidAllergens: []
+  };
+}
+
+// Usage in menu component:
+function Menu() {
+  const preferences = usePassportPreferences();
+
+  const { data } = useQuery(GET_DISHES, {
+    variables: {
+      menuKey: MENU_KEY,
+      preferences // Automatically uses Passport prefs if logged in
+    }
+  });
+
+  // ...
+}
+```
+
+## The Complete Flow
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                       USER JOURNEY                            │
+├──────────────────────────────────────────────────────────────┤
+│                                                               │
+│  1. User visits your app                                      │
+│     └─► Show "Continue with Passport" option                  │
+│                                                               │
+│  2. User logs in with Passport                                │
+│     └─► Fetch their preferences & loyalty programs            │
+│                                                               │
+│  3. User browses menu                                         │
+│     └─► Menu API uses their Passport preferences              │
+│     └─► Dishes show personalized match status                 │
+│                                                               │
+│  4. User adds to cart                                         │
+│     └─► Check for applicable loyalty programs                 │
+│     └─► Show available rewards                                │
+│                                                               │
+│  5. User completes order                                      │
+│     └─► Points earned automatically                           │
+│     └─► Meal added to Passport history                        │
+│     └─► Synced to connected health apps                       │
+│                                                               │
+└──────────────────────────────────────────────────────────────┘
+```
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Passport Overview" icon="passport" href="/passport/overview">
+    Learn about the universal dining identity
+  </Card>
+  <Card title="Meta-Loyalty" icon="star" href="/passport/loyalty">
+    Deep dive into loyalty integration
+  </Card>
+</CardGroup>

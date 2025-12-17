@@ -1,0 +1,442 @@
+---
+title: Best Practices
+description: Production-ready patterns for EveryBite integration
+---
+
+# Best Practices
+
+Follow these patterns to build robust, performant integrations with the EveryBite APIs.
+
+## Caching
+
+### Client-Side Caching
+
+Menu data changes infrequently. Cache aggressively.
+
+```jsx
+// Apollo Client with smart caching
+const client = new ApolloClient({
+  cache: new InMemoryCache({
+    typePolicies: {
+      Dish: {
+        // Cache dishes by ID across queries
+        keyFields: ['id'],
+      },
+      Query: {
+        fields: {
+          dishes: {
+            // Merge paginated results
+            keyArgs: ['menuKey', 'filters'],
+            merge(existing, incoming) {
+              return {
+                ...incoming,
+                results: [...(existing?.results || []), ...incoming.results]
+              };
+            }
+          }
+        }
+      }
+    }
+  }),
+  defaultOptions: {
+    watchQuery: {
+      // Return cached data while fetching fresh
+      fetchPolicy: 'cache-and-network'
+    }
+  }
+});
+```
+
+### Cache Durations
+
+| Data Type | Recommended TTL | Why |
+|-----------|-----------------|-----|
+| Menu structure | 1 hour | Categories rarely change |
+| Dish details | 15 minutes | Prices/availability may change |
+| Nutrition data | 24 hours | Very stable |
+| Filter options | 1 hour | Based on menu |
+| Search suggestions | 5 minutes | User-specific context |
+
+### Server-Side Caching
+
+For backend integrations:
+
+```javascript
+// Redis caching example
+async function getDishes(menuKey, filters) {
+  const cacheKey = `dishes:${menuKey}:${hash(filters)}`;
+
+  // Try cache first
+  const cached = await redis.get(cacheKey);
+  if (cached) return JSON.parse(cached);
+
+  // Fetch from API
+  const data = await everyBiteClient.query({
+    query: GET_DISHES,
+    variables: { menuKey, filters }
+  });
+
+  // Cache for 15 minutes
+  await redis.setex(cacheKey, 900, JSON.stringify(data));
+
+  return data;
+}
+```
+
+## Error Handling
+
+### GraphQL Errors
+
+EveryBite returns structured errors:
+
+```json
+{
+  "errors": [
+    {
+      "message": "Invalid menu key",
+      "extensions": {
+        "code": "INVALID_MENU_KEY",
+        "menuKey": "mk_invalid"
+      }
+    }
+  ]
+}
+```
+
+### Error Codes
+
+| Code | Meaning | Action |
+|------|---------|--------|
+| `INVALID_MENU_KEY` | Key doesn't exist or expired | Check dashboard for valid key |
+| `UNAUTHORIZED_BRAND` | Key doesn't have access | Contact support for access |
+| `INVALID_FILTER` | Malformed filter parameter | Validate input |
+| `DISH_NOT_FOUND` | Dish ID doesn't exist | May have been removed |
+| `RATE_LIMITED` | Too many requests | Implement backoff |
+| `INVALID_TOKEN` | Passport token invalid | Re-authenticate user |
+
+### Handling Pattern
+
+```jsx
+function useMenuWithErrorHandling(menuKey) {
+  const { data, error, loading } = useQuery(GET_DISHES, {
+    variables: { menuKey }
+  });
+
+  // Handle specific error types
+  if (error) {
+    const code = error.graphQLErrors?.[0]?.extensions?.code;
+
+    switch (code) {
+      case 'INVALID_MENU_KEY':
+        return { error: 'Configuration error. Please contact support.' };
+      case 'RATE_LIMITED':
+        return { error: 'Too many requests. Please wait a moment.' };
+      case 'UNAUTHORIZED_BRAND':
+        return { error: 'Access not configured for this restaurant.' };
+      default:
+        return { error: 'Unable to load menu. Please try again.' };
+    }
+  }
+
+  return { data, loading };
+}
+```
+
+## Rate Limiting
+
+### Limits by Key Type
+
+| Key Type | Requests/min | Requests/day |
+|----------|--------------|--------------|
+| Restaurant Key | 60 | 10,000 |
+| Chain Key | 300 | 100,000 |
+| Brand Key | 1,000 | Unlimited |
+
+### Reading Rate Limit Headers
+
+```javascript
+// Response headers
+const headers = response.headers;
+const limit = headers.get('X-RateLimit-Limit');
+const remaining = headers.get('X-RateLimit-Remaining');
+const reset = headers.get('X-RateLimit-Reset'); // Unix timestamp
+
+if (remaining < 10) {
+  console.warn(`Rate limit warning: ${remaining} requests remaining`);
+}
+```
+
+### Implementing Backoff
+
+```javascript
+async function queryWithBackoff(query, variables, maxRetries = 3) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await client.query({ query, variables });
+    } catch (error) {
+      const isRateLimited =
+        error.graphQLErrors?.[0]?.extensions?.code === 'RATE_LIMITED';
+
+      if (isRateLimited && attempt < maxRetries - 1) {
+        // Exponential backoff: 1s, 2s, 4s
+        const delay = Math.pow(2, attempt) * 1000;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+
+      throw error;
+    }
+  }
+}
+```
+
+## Security
+
+### Protect Your Menu Key
+
+<Warning>
+Never expose your Menu Key in client-side code if you have a backend.
+</Warning>
+
+**For apps with a backend:**
+
+```javascript
+// Backend proxy
+app.post('/api/menu', async (req, res) => {
+  const data = await everyBiteClient.query({
+    query: GET_DISHES,
+    variables: {
+      menuKey: process.env.EVERYBITE_MENU_KEY, // Server-side only
+      filters: req.body.filters
+    }
+  });
+  res.json(data);
+});
+```
+
+**For client-only apps:**
+
+Restaurant Keys are designed to be safe for client exposure since they only provide read access to public menu data. However:
+
+- Use environment variables, not hardcoded strings
+- Configure domain restrictions in your dashboard
+- Monitor usage for anomalies
+
+### Passport Token Handling
+
+```javascript
+// Store tokens securely
+function storePassportToken(token) {
+  // Use httpOnly cookie for web
+  document.cookie = `passport_token=${token}; Secure; SameSite=Strict`;
+
+  // Or secure storage for mobile
+  SecureStore.setItemAsync('passport_token', token);
+}
+
+// Never log tokens
+console.log('User logged in'); // Good
+console.log(`Token: ${token}`); // Bad!
+```
+
+### Validate User Input
+
+```javascript
+// Sanitize search queries
+function sanitizeSearch(query) {
+  return query
+    .trim()
+    .substring(0, 100) // Limit length
+    .replace(/[<>]/g, ''); // Remove potential XSS
+}
+
+// Validate filter values
+function validateFilters(filters) {
+  const validDiets = ['VEGAN', 'VEGETARIAN', 'GLUTEN_FREE', ...];
+
+  if (filters.diets) {
+    filters.diets = filters.diets.filter(d => validDiets.includes(d));
+  }
+
+  if (filters.caloriesMax) {
+    filters.caloriesMax = Math.min(Math.max(0, filters.caloriesMax), 5000);
+  }
+
+  return filters;
+}
+```
+
+## Performance
+
+### Query Only What You Need
+
+```graphql
+# Bad: Fetching everything
+query {
+  dishes(menuKey: "...") {
+    results {
+      dish {
+        id name description imageUrl price
+        nutrition { calories protein carbohydrates fatTotal fatSaturated ... }
+        allergens { type displayName severity }
+        customizationGroups { ... }
+      }
+    }
+  }
+}
+
+# Good: Fetch for list view
+query DishList {
+  dishes(menuKey: "...") {
+    results {
+      dish {
+        id name imageUrl price
+        nutrition { calories }
+      }
+      matchStatus
+    }
+  }
+}
+
+# Good: Fetch details on demand
+query DishDetail($id: ID!) {
+  dish(menuKey: "...", dishId: $id) {
+    dish {
+      id name description imageUrl price
+      nutrition { calories protein carbohydrates fatTotal }
+      allergens { type displayName }
+      customizationGroups { ... }
+    }
+  }
+}
+```
+
+### Pagination
+
+Always paginate large result sets:
+
+```graphql
+query PaginatedDishes($after: String) {
+  dishes(
+    menuKey: "..."
+    pagination: { first: 20, after: $after }
+  ) {
+    results { ... }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    totalCount
+  }
+}
+```
+
+### Prefetching
+
+Anticipate user actions:
+
+```jsx
+function DishCard({ dish }) {
+  const client = useApolloClient();
+
+  // Prefetch details on hover
+  const handleMouseEnter = () => {
+    client.query({
+      query: GET_DISH_DETAILS,
+      variables: { dishId: dish.id }
+    });
+  };
+
+  return (
+    <div onMouseEnter={handleMouseEnter}>
+      {/* ... */}
+    </div>
+  );
+}
+```
+
+## Testing
+
+### Use the Sandbox
+
+Always develop against sandbox:
+
+```javascript
+const API_URL = process.env.NODE_ENV === 'production'
+  ? 'https://api.everybite.com/graphql'
+  : 'https://api.everybite-stage.com/graphql';
+```
+
+### Mock Data for Unit Tests
+
+```javascript
+// __mocks__/dishes.js
+export const mockDishes = {
+  results: [
+    {
+      dish: {
+        id: 'dish_1',
+        name: 'Test Salad',
+        nutrition: { calories: 350 },
+        allergens: []
+      },
+      matchStatus: 'MATCH'
+    }
+  ],
+  totalCount: 1
+};
+
+// Component test
+test('renders dishes', () => {
+  render(
+    <MockedProvider mocks={[{
+      request: { query: GET_DISHES, variables: { menuKey: 'test' } },
+      result: { data: { dishes: mockDishes } }
+    }]}>
+      <Menu />
+    </MockedProvider>
+  );
+
+  expect(screen.getByText('Test Salad')).toBeInTheDocument();
+});
+```
+
+## Monitoring
+
+Track these metrics:
+
+| Metric | Why |
+|--------|-----|
+| API response time | Detect latency issues |
+| Error rate by code | Identify recurring problems |
+| Cache hit rate | Optimize caching strategy |
+| Rate limit proximity | Prevent hitting limits |
+
+```javascript
+// Example: Track with your analytics
+client.query({ query, variables })
+  .then(result => {
+    analytics.track('api_call', {
+      query: query.definitions[0].name.value,
+      duration: Date.now() - startTime,
+      cached: result.loading === false
+    });
+  })
+  .catch(error => {
+    analytics.track('api_error', {
+      code: error.graphQLErrors?.[0]?.extensions?.code,
+      query: query.definitions[0].name.value
+    });
+  });
+```
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Architecture" icon="sitemap" href="/concepts/architecture">
+    System design overview
+  </Card>
+  <Card title="Authentication" icon="key" href="/authentication">
+    Keys and security
+  </Card>
+</CardGroup>

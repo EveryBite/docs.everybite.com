@@ -1,0 +1,424 @@
+---
+title: Build a Dietary-Aware Menu Browser
+description: Create a menu that adapts to dietary preferences
+---
+
+# Build a Dietary-Aware Menu Browser
+
+In this tutorial, you'll build a menu browser that shows personalized results based on dietary preferences. Users will see dishes marked as "Match," "Partial Match," or "Not a Match" based on their needs.
+
+## What You'll Build
+
+A React component that:
+- Displays menu items from any EveryBite-enabled restaurant
+- Filters by dietary preferences (vegan, gluten-free, etc.)
+- Shows match status for each dish
+- Updates nutrition in real-time for customizable items
+
+## Prerequisites
+
+- A Menu Key (get one at [developer.everybite.com](https://developer.everybite.com))
+- Basic React knowledge
+- A GraphQL client (we'll use Apollo)
+
+## Step 1: Set Up Your Project
+
+```bash
+npx create-react-app dietary-menu
+cd dietary-menu
+npm install @apollo/client graphql
+```
+
+## Step 2: Configure Apollo Client
+
+```jsx
+// src/apollo.js
+import { ApolloClient, InMemoryCache, createHttpLink } from '@apollo/client';
+import { setContext } from '@apollo/client/link/context';
+
+const httpLink = createHttpLink({
+  uri: 'https://api.everybite.com/graphql',
+});
+
+const authLink = setContext((_, { headers }) => {
+  return {
+    headers: {
+      ...headers,
+      authorization: `Bearer ${process.env.REACT_APP_MENU_KEY}`,
+    }
+  };
+});
+
+export const client = new ApolloClient({
+  link: authLink.concat(httpLink),
+  cache: new InMemoryCache()
+});
+```
+
+## Step 3: Create the Menu Query
+
+```jsx
+// src/queries.js
+import { gql } from '@apollo/client';
+
+export const GET_DISHES = gql`
+  query GetDishes(
+    $menuKey: String!
+    $filters: DishFilters
+    $preferences: DinerPreferences
+  ) {
+    dishes(
+      menuKey: $menuKey
+      filters: $filters
+      preferences: $preferences
+    ) {
+      results {
+        dish {
+          id
+          name
+          description
+          imageUrl
+          price
+          nutrition {
+            calories
+            protein
+            carbohydrates
+            fatTotal
+          }
+          allergens {
+            type
+            displayName
+          }
+          diets {
+            type
+            displayName
+          }
+        }
+        matchStatus
+        matchReasons
+        modifications {
+          description
+          removeAllergens
+        }
+      }
+      totalCount
+    }
+  }
+`;
+```
+
+## Step 4: Build the Preference Selector
+
+```jsx
+// src/components/PreferenceSelector.jsx
+import React from 'react';
+
+const DIETS = [
+  { value: 'VEGAN', label: 'Vegan' },
+  { value: 'VEGETARIAN', label: 'Vegetarian' },
+  { value: 'GLUTEN_FREE', label: 'Gluten-Free' },
+  { value: 'KETO', label: 'Keto' },
+  { value: 'PALEO', label: 'Paleo' },
+];
+
+const ALLERGENS = [
+  { value: 'DAIRY', label: 'Dairy' },
+  { value: 'PEANUT', label: 'Peanuts' },
+  { value: 'TREE_NUT', label: 'Tree Nuts' },
+  { value: 'GLUTEN', label: 'Gluten' },
+  { value: 'SOY', label: 'Soy' },
+  { value: 'EGG', label: 'Eggs' },
+  { value: 'SHELLFISH', label: 'Shellfish' },
+];
+
+export function PreferenceSelector({ preferences, onChange }) {
+  const toggleDiet = (diet) => {
+    const current = preferences.diets || [];
+    const updated = current.includes(diet)
+      ? current.filter(d => d !== diet)
+      : [...current, diet];
+    onChange({ ...preferences, diets: updated });
+  };
+
+  const toggleAllergen = (allergen) => {
+    const current = preferences.avoidAllergens || [];
+    const updated = current.includes(allergen)
+      ? current.filter(a => a !== allergen)
+      : [...current, allergen];
+    onChange({ ...preferences, avoidAllergens: updated });
+  };
+
+  return (
+    <div className="preference-selector">
+      <div className="section">
+        <h3>Dietary Preferences</h3>
+        <div className="chips">
+          {DIETS.map(diet => (
+            <button
+              key={diet.value}
+              className={`chip ${preferences.diets?.includes(diet.value) ? 'active' : ''}`}
+              onClick={() => toggleDiet(diet.value)}
+            >
+              {diet.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="section">
+        <h3>Avoid Allergens</h3>
+        <div className="chips">
+          {ALLERGENS.map(allergen => (
+            <button
+              key={allergen.value}
+              className={`chip ${preferences.avoidAllergens?.includes(allergen.value) ? 'active' : ''}`}
+              onClick={() => toggleAllergen(allergen.value)}
+            >
+              {allergen.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+## Step 5: Build the Dish Card with Match Status
+
+```jsx
+// src/components/DishCard.jsx
+import React from 'react';
+
+export function DishCard({ dish, matchStatus, matchReasons, modifications }) {
+  const statusColors = {
+    MATCH: '#22c55e',
+    PARTIAL_MATCH: '#f59e0b',
+    NO_MATCH: '#ef4444'
+  };
+
+  const statusLabels = {
+    MATCH: 'Perfect Match',
+    PARTIAL_MATCH: 'Can Be Modified',
+    NO_MATCH: 'Not Compatible'
+  };
+
+  return (
+    <div className="dish-card">
+      <img src={dish.imageUrl} alt={dish.name} />
+
+      <div className="content">
+        <div className="header">
+          <h3>{dish.name}</h3>
+          <span
+            className="match-badge"
+            style={{ backgroundColor: statusColors[matchStatus] }}
+          >
+            {statusLabels[matchStatus]}
+          </span>
+        </div>
+
+        <p className="description">{dish.description}</p>
+
+        <div className="nutrition">
+          <span>{dish.nutrition.calories} cal</span>
+          <span>{dish.nutrition.protein}g protein</span>
+          <span>{dish.nutrition.carbohydrates}g carbs</span>
+        </div>
+
+        {/* Show why it's a match or not */}
+        {matchReasons && matchReasons.length > 0 && (
+          <div className="match-reasons">
+            {matchReasons.map((reason, i) => (
+              <span key={i} className="reason">{reason}</span>
+            ))}
+          </div>
+        )}
+
+        {/* Show how to modify for partial matches */}
+        {matchStatus === 'PARTIAL_MATCH' && modifications && (
+          <div className="modifications">
+            <strong>To make it compatible:</strong>
+            <ul>
+              {modifications.map((mod, i) => (
+                <li key={i}>{mod.description}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <div className="price">${dish.price.toFixed(2)}</div>
+      </div>
+    </div>
+  );
+}
+```
+
+## Step 6: Put It All Together
+
+```jsx
+// src/App.jsx
+import React, { useState } from 'react';
+import { useQuery } from '@apollo/client';
+import { GET_DISHES } from './queries';
+import { PreferenceSelector } from './components/PreferenceSelector';
+import { DishCard } from './components/DishCard';
+
+function App() {
+  const [preferences, setPreferences] = useState({
+    diets: [],
+    avoidAllergens: []
+  });
+
+  const { data, loading, error } = useQuery(GET_DISHES, {
+    variables: {
+      menuKey: process.env.REACT_APP_MENU_KEY,
+      preferences: preferences
+    }
+  });
+
+  if (loading) return <div>Loading menu...</div>;
+  if (error) return <div>Error loading menu</div>;
+
+  const dishes = data?.dishes?.results || [];
+
+  // Group by match status
+  const matches = dishes.filter(d => d.matchStatus === 'MATCH');
+  const partials = dishes.filter(d => d.matchStatus === 'PARTIAL_MATCH');
+  const noMatch = dishes.filter(d => d.matchStatus === 'NO_MATCH');
+
+  return (
+    <div className="app">
+      <header>
+        <h1>Menu</h1>
+        <PreferenceSelector
+          preferences={preferences}
+          onChange={setPreferences}
+        />
+      </header>
+
+      <main>
+        {matches.length > 0 && (
+          <section>
+            <h2>Perfect For You ({matches.length})</h2>
+            <div className="dish-grid">
+              {matches.map(({ dish, matchStatus, matchReasons }) => (
+                <DishCard
+                  key={dish.id}
+                  dish={dish}
+                  matchStatus={matchStatus}
+                  matchReasons={matchReasons}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {partials.length > 0 && (
+          <section>
+            <h2>Can Be Modified ({partials.length})</h2>
+            <div className="dish-grid">
+              {partials.map(({ dish, matchStatus, matchReasons, modifications }) => (
+                <DishCard
+                  key={dish.id}
+                  dish={dish}
+                  matchStatus={matchStatus}
+                  matchReasons={matchReasons}
+                  modifications={modifications}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {noMatch.length > 0 && (
+          <section>
+            <h2>Not Compatible ({noMatch.length})</h2>
+            <div className="dish-grid">
+              {noMatch.map(({ dish, matchStatus, matchReasons }) => (
+                <DishCard
+                  key={dish.id}
+                  dish={dish}
+                  matchStatus={matchStatus}
+                  matchReasons={matchReasons}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+      </main>
+    </div>
+  );
+}
+
+export default App;
+```
+
+## Step 7: Add Styles
+
+```css
+/* src/App.css */
+.preference-selector {
+  background: #f8f9fa;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 2rem;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.chip {
+  padding: 0.5rem 1rem;
+  border: 1px solid #ddd;
+  border-radius: 20px;
+  background: white;
+  cursor: pointer;
+}
+
+.chip.active {
+  background: #2563eb;
+  color: white;
+  border-color: #2563eb;
+}
+
+.dish-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.dish-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.match-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  color: white;
+  font-size: 0.875rem;
+}
+
+.modifications {
+  background: #fef3c7;
+  padding: 0.75rem;
+  border-radius: 8px;
+  margin-top: 0.5rem;
+}
+```
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card title="Real-time Nutrition" icon="calculator" href="/tutorials/nutrition-calculator">
+    Update nutrition as users customize dishes
+  </Card>
+  <Card title="Add Passport" icon="passport" href="/tutorials/passport-integration">
+    Save preferences across sessions
+  </Card>
+</CardGroup>

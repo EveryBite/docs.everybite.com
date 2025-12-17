@@ -1,0 +1,407 @@
+---
+title: GraphQL Schema
+description: Complete schema reference and playground access
+---
+
+# GraphQL Schema
+
+EveryBite uses GraphQL for all API interactions. This page provides schema documentation and access to interactive tools.
+
+## Interactive Playground
+
+Explore the API interactively:
+
+<CardGroup cols={2}>
+  <Card title="Sandbox Playground" icon="play" href="https://api.everybite-stage.com/graphql">
+    Test queries against sandbox data
+  </Card>
+  <Card title="Schema Docs" icon="book" href="https://api.everybite-stage.com/docs">
+    Auto-generated schema documentation
+  </Card>
+</CardGroup>
+
+## Endpoints
+
+| Environment | URL |
+|-------------|-----|
+| Production | `https://api.everybite.com/graphql` |
+| Sandbox | `https://api.everybite-stage.com/graphql` |
+
+## Core Types
+
+### Dish
+
+The central data type representing a menu item.
+
+```graphql
+type Dish {
+  id: ID!
+  name: String!
+  description: String
+  imageUrl: String
+  price: Float!
+
+  # Nutrition data
+  nutrition: Nutrition!
+
+  # Dietary information
+  allergens: [Allergen!]!
+  diets: [Diet!]!
+
+  # Customization
+  customizable: Boolean!
+  customizationGroups: [CustomizationGroup!]
+
+  # Categorization
+  category: Category
+  restaurant: Restaurant!
+}
+```
+
+### Nutrition
+
+Complete nutrition facts for a dish.
+
+```graphql
+type Nutrition {
+  calories: Int!
+  caloriesFromFat: Int
+
+  # Macronutrients (grams)
+  protein: Float!
+  carbohydrates: Float!
+  fatTotal: Float!
+  fatSaturated: Float
+  fatTrans: Float
+
+  # Other nutrients
+  fiber: Float
+  sugar: Float
+  sodium: Float
+  cholesterol: Float
+
+  # Vitamins & minerals (percentage daily value)
+  vitaminA: Float
+  vitaminC: Float
+  calcium: Float
+  iron: Float
+
+  # Serving info
+  servingSize: String
+  servingsPerContainer: Float
+}
+```
+
+### Allergen
+
+```graphql
+type Allergen {
+  type: AllergenType!
+  displayName: String!
+  severity: AllergenSeverity!
+}
+
+enum AllergenType {
+  DAIRY
+  EGG
+  PEANUT
+  TREE_NUT
+  GLUTEN
+  SOY
+  FISH
+  SHELLFISH
+  SESAME
+}
+
+enum AllergenSeverity {
+  CONTAINS      # Ingredient in the dish
+  MAY_CONTAIN   # Cross-contact possible
+  FACILITY      # Processed in facility with allergen
+}
+```
+
+### Diet
+
+```graphql
+type Diet {
+  type: DietType!
+  displayName: String!
+}
+
+enum DietType {
+  VEGAN
+  VEGETARIAN
+  GLUTEN_FREE
+  KETO
+  PALEO
+  HALAL
+  KOSHER
+  LOW_SODIUM
+  LOW_CARB
+  HIGH_PROTEIN
+}
+```
+
+### Restaurant
+
+```graphql
+type Restaurant {
+  id: ID!
+  name: String!
+  address: Address!
+  phone: String
+  hours: [OperatingHours!]
+
+  # Hierarchy
+  chain: Chain
+  brand: Brand
+
+  # Capabilities
+  supportsPickup: Boolean!
+  supportsDelivery: Boolean!
+  supportsDineIn: Boolean!
+}
+
+type Address {
+  street1: String!
+  street2: String
+  city: String!
+  state: String!
+  postalCode: String!
+  country: String!
+  latitude: Float
+  longitude: Float
+}
+```
+
+### DishResult
+
+Returned from queries, includes match status.
+
+```graphql
+type DishResult {
+  dish: Dish!
+  matchStatus: MatchStatus!
+  matchReasons: [String!]
+  modifications: [Modification!]
+}
+
+enum MatchStatus {
+  MATCH           # Fully compatible with preferences
+  PARTIAL_MATCH   # Can be modified to be compatible
+  NO_MATCH        # Not compatible
+}
+
+type Modification {
+  description: String!
+  removeAllergens: [AllergenType!]
+  nutritionChange: Nutrition
+}
+```
+
+## Queries
+
+### dishes
+
+Search and filter dishes.
+
+```graphql
+query dishes(
+  menuKey: String!
+  filters: DishFilters
+  preferences: DinerPreferences
+  pagination: PaginationInput
+  sort: SortBy
+): DishConnection!
+```
+
+**Arguments:**
+
+```graphql
+input DishFilters {
+  search: String              # Keyword search
+  categoryId: ID              # Filter by category
+  diets: [DietType!]          # Required diets
+  excludeAllergens: [AllergenType!]  # Must not contain
+  caloriesMax: Int            # Max calories
+  priceMax: Float             # Max price
+}
+
+input DinerPreferences {
+  diets: [DietType!]
+  avoidAllergens: [AllergenType!]
+  calorieTarget: Int
+  nutritionGoals: [NutritionGoal!]
+}
+
+input PaginationInput {
+  first: Int
+  after: String
+}
+
+enum SortBy {
+  FEATURED
+  CALORIES_ASC
+  CALORIES_DESC
+  PRICE_ASC
+  PRICE_DESC
+  NAME_ASC
+}
+```
+
+### dish
+
+Get a single dish by ID.
+
+```graphql
+query dish(
+  menuKey: String!
+  dishId: ID!
+  preferences: DinerPreferences
+): DishResult
+```
+
+### categories
+
+Get menu categories.
+
+```graphql
+query categories(menuKey: String!): [Category!]!
+```
+
+### filterOptions
+
+Get available filter values for the current menu.
+
+```graphql
+query filterOptions(menuKey: String!): FilterOptions!
+
+type FilterOptions {
+  diets: [DietOption!]!
+  allergens: [AllergenOption!]!
+  calorieRange: Range!
+  priceRange: Range!
+}
+```
+
+### searchSuggestions
+
+Autocomplete suggestions.
+
+```graphql
+query searchSuggestions(
+  menuKey: String!
+  query: String!
+  limit: Int = 5
+): [SearchSuggestion!]!
+
+type SearchSuggestion {
+  text: String!
+  type: SuggestionType!  # DISH, CATEGORY, INGREDIENT
+  dishId: ID
+}
+```
+
+## Mutations
+
+### Passport Mutations
+
+```graphql
+# Update dietary preferences
+mutation updatePassportPreferences(
+  token: String!
+  input: PreferencesInput!
+): Passport!
+
+# Save a dish to favorites
+mutation saveDish(
+  token: String!
+  dishId: ID!
+): SavedDish!
+
+# Remove from favorites
+mutation unsaveDish(
+  token: String!
+  savedDishId: ID!
+): Boolean!
+
+# Connect a loyalty program
+mutation connectLoyaltyProgram(
+  token: String!
+  programId: ID!
+  authCode: String!
+): LoyaltyConnection!
+
+# Connect health app
+mutation connectHealthApp(
+  token: String!
+  platform: HealthPlatform!
+  authCode: String!
+): HealthConnection!
+```
+
+### Ordering Mutations
+
+```graphql
+# Add to cart
+mutation addToCart(
+  sessionId: String!
+  dishId: ID!
+  quantity: Int!
+  customizations: [CustomizationInput!]
+): Cart!
+
+# Update cart item
+mutation updateCartItem(
+  sessionId: String!
+  cartItemId: ID!
+  quantity: Int
+  customizations: [CustomizationInput!]
+): Cart!
+
+# Remove from cart
+mutation removeFromCart(
+  sessionId: String!
+  cartItemId: ID!
+): Cart!
+
+# Complete checkout
+mutation checkout(
+  sessionId: String!
+  paymentMethod: PaymentMethodInput!
+  fulfillment: FulfillmentInput!
+): Order!
+```
+
+## Download Schema
+
+For development tooling and code generation:
+
+- [schema.graphql](/schema.graphql) - Full SDL schema file
+
+<Note>
+The downloadable schema is updated weekly. For the most current schema, use the introspection query against the sandbox endpoint.
+</Note>
+
+## Introspection
+
+Fetch the schema programmatically:
+
+```bash
+# Using Apollo CLI
+apollo schema:download --endpoint=https://api.everybite-stage.com/graphql schema.json
+
+# Using graphql-codegen
+npx graphql-codegen --config codegen.yml
+```
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="key" href="/authentication">
+    API keys and tokens
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Make your first query
+  </Card>
+</CardGroup>

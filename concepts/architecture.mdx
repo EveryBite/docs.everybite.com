@@ -1,0 +1,216 @@
+---
+title: Architecture Overview
+description: How EveryBite's products work together
+---
+
+# Architecture Overview
+
+EveryBite provides a suite of APIs that work together to create personalized dining experiences. This guide explains how the pieces fit together.
+
+## The Three Products
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      YOUR APPLICATION                            │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│   ┌─────────────┐    ┌─────────────┐    ┌─────────────┐        │
+│   │  Menu API   │    │  Passport   │    │ Ordering API│        │
+│   │             │    │             │    │             │        │
+│   │ • Search    │◄──►│ • Prefs     │◄──►│ • Cart      │        │
+│   │ • Filter    │    │ • History   │    │ • Checkout  │        │
+│   │ • Nutrition │    │ • Loyalty   │    │ • Fulfill   │        │
+│   └─────────────┘    └─────────────┘    └─────────────┘        │
+│         │                  │                  │                 │
+└─────────┼──────────────────┼──────────────────┼─────────────────┘
+          │                  │                  │
+          ▼                  ▼                  ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    EVERYBITE PLATFORM                            │
+│                                                                  │
+│   Restaurant Data │ Nutrition Engine │ Loyalty Networks         │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Menu API
+The foundation. Access menu data, search dishes, filter by dietary needs, and calculate real-time nutrition for customizable items.
+
+**Use when:** Building any menu display, search, or filtering functionality.
+
+### Passport
+The diner's universal identity. Stores preferences, tracks meal history, connects loyalty programs, and syncs with health apps.
+
+**Use when:** You want personalization that follows the diner across restaurants.
+
+### Ordering API
+Complete the transaction. Manages cart, checkout, and fulfillment for pickup or delivery.
+
+**Use when:** You're enabling ordering (separate product - contact sales).
+
+## Data Flow
+
+### Anonymous Diner (Menu API only)
+
+```
+User opens your app
+        │
+        ▼
+┌───────────────────┐
+│ Your App requests │
+│ dishes with       │
+│ Menu Key only     │
+└─────────┬─────────┘
+          │
+          ▼
+┌───────────────────┐
+│ Menu API returns  │
+│ all dishes        │
+│ (no personalization)
+└───────────────────┘
+```
+
+### Personalized Diner (Menu API + Passport)
+
+```
+User opens your app
+        │
+        ▼
+┌───────────────────┐
+│ Your App requests │
+│ dishes with       │
+│ Menu Key +        │
+│ Passport Token    │
+└─────────┬─────────┘
+          │
+          ▼
+┌───────────────────┐
+│ Menu API returns  │
+│ dishes with       │
+│ Match Status      │──► MATCH / PARTIAL / NO MATCH
+│ based on user's   │
+│ Passport prefs    │
+└───────────────────┘
+```
+
+### Full Transaction Flow
+
+```
+┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
+│  Browse  │───►│  Select  │───►│   Cart   │───►│ Checkout │
+│   Menu   │    │   Dish   │    │          │    │          │
+└──────────┘    └──────────┘    └──────────┘    └──────────┘
+     │               │               │               │
+     ▼               ▼               ▼               ▼
+  Menu API       Menu API       Ordering       Ordering
+  + Passport     (nutrition)       API            API
+                                    │               │
+                                    ▼               ▼
+                               ┌──────────┐   ┌──────────┐
+                               │ Passport │   │ Passport │
+                               │ (loyalty)│   │ (history)│
+                               └──────────┘   └──────────┘
+```
+
+## Integration Patterns
+
+### Pattern 1: Headless API
+
+You build the entire UI. Maximum flexibility.
+
+```jsx
+// Your custom React app
+const { data } = useQuery(GET_DISHES, {
+  variables: {
+    menuKey: "mk_xxx",
+    filters: userPreferences
+  }
+});
+
+// Render however you want
+return <YourCustomMenuUI dishes={data.dishes} />;
+```
+
+**Best for:** Custom apps, unique brand experiences, native mobile apps.
+
+### Pattern 2: Embedded Widget
+
+Use EveryBite's pre-built SmartMenu component.
+
+```html
+<!-- Drop into any webpage -->
+<script src="https://cdn.everybite.com/smartmenu.js"></script>
+<div id="everybite-menu" data-menu-key="mk_xxx"></div>
+```
+
+**Best for:** Quick integration, restaurants without dev resources.
+
+### Pattern 3: Hybrid
+
+Use our API for data, our components for complex UI.
+
+```jsx
+// Your app structure
+<YourHeader />
+<YourNavigation />
+
+{/* EveryBite nutrition calculator component */}
+<EveryBiteNutritionCalculator dishId={selectedDish} />
+
+<YourFooter />
+```
+
+**Best for:** Leveraging complex features (nutrition calc) while maintaining brand.
+
+## Authentication Model
+
+Two layers of authentication serve different purposes:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    YOUR REQUEST                          │
+├─────────────────────────────────────────────────────────┤
+│                                                          │
+│  Menu Key (required)         Passport Token (optional)   │
+│  ─────────────────          ────────────────────────     │
+│  • Identifies your app      • Identifies the diner       │
+│  • Controls data access     • Enables personalization    │
+│  • Rate limiting            • Stores preferences         │
+│  • Static per integration   • Dynamic per user           │
+│                                                          │
+│  Authorization: Bearer mk_xxx,pt_yyy                     │
+│                                                          │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Menu Key Scope
+
+| Key Type | Access |
+|----------|--------|
+| Restaurant Key | One location's menu |
+| Chain Key | All locations in a chain |
+| Brand Key | All chains under a brand |
+
+### Passport Token
+
+Obtained when a user authenticates with EveryBite Passport (OAuth flow or direct login).
+
+## Choosing Your Architecture
+
+| Scenario | Recommended Approach |
+|----------|---------------------|
+| Restaurant website with menu | Embedded Widget |
+| Food delivery app | Headless API + Passport |
+| Kiosk / POS system | Headless API |
+| Health & fitness app | Headless API + Passport (for history) |
+| Loyalty aggregator | Passport API only |
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Make your first API call
+  </Card>
+  <Card title="Authentication" icon="key" href="/authentication">
+    Keys and tokens explained
+  </Card>
+</CardGroup>
